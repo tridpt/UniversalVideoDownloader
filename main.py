@@ -406,7 +406,7 @@ class YouTubeDownloaderApp(ctk.CTk):
     def fetch_video_info(self):
         url = self.url_var.get().strip()
         if not url or not url.startswith("http"):
-            self.thumbnail_label.configure(image="", text="Nhập link để hiển thị video")
+            self.thumbnail_label.configure(image=None, text="Nhập link để hiển thị video")
             self.video_title_label.configure(text="")
             self.video_duration_label.configure(text="")
             return
@@ -480,11 +480,11 @@ class YouTubeDownloaderApp(ctk.CTk):
                     ctk_image = ctk.CTkImage(light_image=image, dark_image=image, size=(384, 216))
                     self._ui(lambda: self.thumbnail_label.configure(image=ctk_image, text=""))
                 except Exception as img_e:
-                    self._ui(lambda: self.thumbnail_label.configure(image="", text="Lỗi khi tải ảnh thu nhỏ"))
+                    self._ui(lambda: self.thumbnail_label.configure(image=None, text="Lỗi khi tải ảnh thu nhỏ"))
         except Exception as e:
             self._ui(lambda: self.video_title_label.configure(text="Không thể lấy thông tin video (Hoặc link bị lỗi)"))
             self._ui(lambda: self.video_duration_label.configure(text=""))
-            self._ui(lambda: self.thumbnail_label.configure(image="", text="Lỗi"))
+            self._ui(lambda: self.thumbnail_label.configure(image=None, text="Lỗi"))
 
     def cancel_download(self):
         self.is_cancelled = True
