@@ -82,11 +82,14 @@ class YouTubeDownloaderApp(ctk.CTk):
         
         self.save_dir = ctk.StringVar(value=self.app_config.get('save_dir', os.path.join(os.path.expanduser('~'), 'Downloads')))
         
-        self.dir_entry = ctk.CTkEntry(self.folder_frame, textvariable=self.save_dir, width=300, height=35, state="disabled")
+        self.dir_entry = ctk.CTkEntry(self.folder_frame, textvariable=self.save_dir, width=250, height=35, state="disabled")
         self.dir_entry.pack(side="left", padx=(0, 10))
         
         self.btn_browse = ctk.CTkButton(self.folder_frame, text="Chọn Thư Mục", width=110, height=35, command=self.browse_folder, fg_color="gray30", hover_color="gray40")
-        self.btn_browse.pack(side="left", padx=(0, 15))
+        self.btn_browse.pack(side="left", padx=(0, 8))
+
+        self.btn_open_dir = ctk.CTkButton(self.folder_frame, text="📂 Mở", width=60, height=35, command=self.open_save_dir, fg_color="#2980b9", hover_color="#3498db")
+        self.btn_open_dir.pack(side="left", padx=(0, 15))
 
         self.smart_folder_var = ctk.BooleanVar(value=self.app_config.get('smart_folder', True))
         self.smart_folder_cb = ctk.CTkCheckBox(self.folder_frame, text="Phân loại nền tảng ngầm (VD: /Youtube)", variable=self.smart_folder_var, font=ctk.CTkFont(size=12, weight="bold"))
@@ -116,7 +119,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         )
         self.playlist_checkbox.pack(side="left", padx=10)
         
-        self.cookie_var = ctk.StringVar(value="Không Dùng Cookie")
+        self.cookie_var = ctk.StringVar(value=self.app_config.get('cookie_choice', "Không Dùng Cookie"))
         self.cookie_menu = ctk.CTkOptionMenu(
             self.options_frame,
             values=["Không Dùng Cookie", "Tài khoản Chrome", "Tài khoản Edge", "Tài khoản Firefox", "Tài khoản Brave"],
@@ -134,13 +137,13 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.adv_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.adv_frame.pack(padx=20, pady=(0, 10))
 
-        self.subtitle_var = ctk.BooleanVar(value=self.app_config.get('subtitle', False))
+        self.subtitle_var = ctk.BooleanVar(value=self.app_config.get('subtitle_opt', False))
         self.subtitle_checkbox = ctk.CTkCheckBox(
             self.adv_frame, text="Tải kèm Phụ đề (Nếu có)", variable=self.subtitle_var, font=ctk.CTkFont(size=12)
         )
         self.subtitle_checkbox.pack(side="left", padx=10)
 
-        self.thumbnail_var = ctk.BooleanVar(value=self.app_config.get('thumbnail', True))
+        self.thumbnail_var = ctk.BooleanVar(value=self.app_config.get('thumbnail_opt', True))
         self.thumbnail_checkbox = ctk.CTkCheckBox(
             self.adv_frame, text="Gắn Ảnh Bìa (vào MP3/MP4)", variable=self.thumbnail_var, font=ctk.CTkFont(size=12)
         )
@@ -239,6 +242,11 @@ class YouTubeDownloaderApp(ctk.CTk):
         # Lưu cấu hình khi đóng cửa sổ
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
+        # Tự dán link từ clipboard nếu phát hiện đường link hợp lệ
+        self._last_clipboard = ""
+        self.after(400, self._check_clipboard_for_link)
+        self.bind("<FocusIn>", lambda e: self._check_clipboard_for_link())
+
     def _load_config(self):
         import json
         try:
@@ -257,6 +265,8 @@ class YouTubeDownloaderApp(ctk.CTk):
                 'format_choice': self.format_var.get(),
                 'smart_folder': self.smart_folder_var.get(),
                 'thumbnail_opt': self.thumbnail_var.get(),
+                'subtitle_opt': self.subtitle_var.get(),
+                'cookie_choice': self.cookie_var.get(),
                 'appearance_mode': 'Dark' if self.appearance_mode_switch.get() == 1 else 'Light',
             }
             with open(self.config_file, 'w', encoding='utf-8') as f:
@@ -380,6 +390,32 @@ class YouTubeDownloaderApp(ctk.CTk):
         folder = filedialog.askdirectory(initialdir=self.save_dir.get())
         if folder:
             self.save_dir.set(folder)
+
+    def open_save_dir(self):
+        folder = self.save_dir.get()
+        try:
+            if not os.path.isdir(folder):
+                os.makedirs(folder, exist_ok=True)
+            os.startfile(folder)
+        except Exception:
+            self.status_label.configure(text="Không thể mở thư mục tải!", text_color="red")
+
+    def _check_clipboard_for_link(self):
+        """Tự động dán link từ clipboard nếu là URL hợp lệ và ô nhập đang trống."""
+        try:
+            clip = self.clipboard_get().strip()
+        except Exception:
+            return  # Clipboard trống hoặc không phải text
+
+        # Bỏ qua nếu không phải link, hoặc đã xử lý rồi, hoặc ô nhập đang có nội dung
+        if not clip.startswith("http") or clip == self._last_clipboard:
+            return
+        if self.url_var.get().strip():
+            return
+
+        self._last_clipboard = clip
+        self.url_var.set(clip)
+        self._set_status("Đã tự dán link từ clipboard.", "gray")
 
     def on_format_change(self, *args):
         url = self.url_var.get().strip()
