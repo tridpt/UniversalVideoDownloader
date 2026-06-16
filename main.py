@@ -10,9 +10,25 @@ import subprocess
 import sys
 
 def get_ffmpeg_path():
+    # Khi đã đóng gói (PyInstaller): dùng ffmpeg nhúng kèm
     if getattr(sys, 'frozen', False):
         return os.path.join(sys._MEIPASS, 'ffmpeg_bin')
-    return r"D:\App\.venv\Lib\site-packages\static_ffmpeg\bin\win32"
+
+    # 1. Thử lấy ffmpeg từ package static_ffmpeg (khả chuyển, không phụ thuộc máy)
+    try:
+        import static_ffmpeg
+        pkg_dir = os.path.dirname(static_ffmpeg.__file__)
+        for sub in ('bin/win32', 'bin/linux', 'bin/darwin', 'bin'):
+            candidate = os.path.join(pkg_dir, *sub.split('/'))
+            if os.path.isdir(candidate):
+                exe = 'ffmpeg.exe' if os.name == 'nt' else 'ffmpeg'
+                if os.path.exists(os.path.join(candidate, exe)):
+                    return candidate
+    except Exception:
+        pass
+
+    # 2. Nếu không có, để None -> yt-dlp tự tìm ffmpeg trong PATH của hệ thống
+    return None
 
 # Thiết lập giao diện hiện đại
 ctk.set_appearance_mode("Dark")
@@ -148,7 +164,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.download_btn = ctk.CTkButton(self.action_frame, text="Tải / Tải Thêm", command=self.add_to_queue, width=150, height=45, font=ctk.CTkFont(size=15, weight="bold"))
         self.download_btn.pack(side="left", padx=10)
         
-        self.cancel_btn = ctk.CTkButton(self.action_frame, text="Hủy tải (Xóa DS", command=self.cancel_download, width=200, height=45, font=ctk.CTkFont(size=14, weight="bold"), fg_color="#c0392b", hover_color="#e74c3c", state="disabled")
+        self.cancel_btn = ctk.CTkButton(self.action_frame, text="Hủy tải (Xóa DS)", command=self.cancel_download, width=200, height=45, font=ctk.CTkFont(size=14, weight="bold"), fg_color="#c0392b", hover_color="#e74c3c", state="disabled")
         self.cancel_btn.pack(side="left", padx=10)
         
         self.is_cancelled = False
@@ -207,6 +223,24 @@ class YouTubeDownloaderApp(ctk.CTk):
         
         self.history_file = os.path.join(os.path.expanduser('~'), '.univideo_history.json')
         self.load_history_from_file()
+
+    def _ui(self, func):
+        """Lên lịch chạy 1 hàm cập nhật giao diện trên main thread (Tkinter không an toàn đa luồng)."""
+        try:
+            self.after(0, func)
+        except Exception:
+            pass
+
+    def _set_status(self, text, color=None):
+        """Cập nhật nhãn trạng thái an toàn từ thread phụ."""
+        if color is not None:
+            self._ui(lambda: self.status_label.configure(text=text, text_color=color))
+        else:
+            self._ui(lambda: self.status_label.configure(text=text))
+
+    def _set_progress(self, value):
+        """Cập nhật thanh tiến trình an toàn từ thread phụ."""
+        self._ui(lambda: self.progress_bar.set(value))
 
     def change_appearance_mode_event(self):
         if self.appearance_mode_switch.get() == 1:
@@ -355,9 +389,10 @@ class YouTubeDownloaderApp(ctk.CTk):
             text = self.video_duration_label.cget("text").split(" | ")[0]
             if file_size_bytes > 0:
                 mb_size = file_size_bytes / (1024 * 1024)
-                self.video_duration_label.configure(text=f"{text} | Dung lượng cỡ: ~{mb_size:.1f} MB")
+                new_text = f"{text} | Dung lượng cỡ: ~{mb_size:.1f} MB"
             else:
-                self.video_duration_label.configure(text=f"{text} | Dung lượng: [Chưa rõ]")
+                new_text = f"{text} | Dung lượng: [Chưa rõ]"
+            self._ui(lambda: self.video_duration_label.configure(text=new_text))
         except Exception as e:
             pass # Lặng lẽ bỏ qua nếu lỗi cập nhật ngầm
 
@@ -410,8 +445,8 @@ class YouTubeDownloaderApp(ctk.CTk):
                 if not thumbnail_url:
                     thumbnail_url = info.get('thumbnails', [{'url': None}])[-1].get('url')
                     
-                self.video_title_label.configure(text=title)
-                self.video_duration_label.configure(text=duration_str)
+                self._ui(lambda: self.video_title_label.configure(text=title))
+                self._ui(lambda: self.video_duration_label.configure(text=duration_str))
             else:
                 # Nếu là 1 Video đơn
                 title = info.get('title', 'Tên video không xác định')
@@ -433,23 +468,23 @@ class YouTubeDownloaderApp(ctk.CTk):
                     duration_str += f" | Dung lượng: [Chưa rõ]"
 
                 thumbnail_url = info.get('thumbnail')
-                self.video_title_label.configure(text=title)
-                self.video_duration_label.configure(text=duration_str)
+                self._ui(lambda: self.video_title_label.configure(text=title))
+                self._ui(lambda: self.video_duration_label.configure(text=duration_str))
 
             # Lấy hình ảnh trên mạng về và Render
             if thumbnail_url:
                 try:
-                    response = requests.get(thumbnail_url)
+                    response = requests.get(thumbnail_url, timeout=15)
                     img_data = response.content
                     image = Image.open(io.BytesIO(img_data))
                     ctk_image = ctk.CTkImage(light_image=image, dark_image=image, size=(384, 216))
-                    self.thumbnail_label.configure(image=ctk_image, text="")
+                    self._ui(lambda: self.thumbnail_label.configure(image=ctk_image, text=""))
                 except Exception as img_e:
-                    self.thumbnail_label.configure(image="", text="Lỗi khi tải ảnh thu nhỏ")
+                    self._ui(lambda: self.thumbnail_label.configure(image="", text="Lỗi khi tải ảnh thu nhỏ"))
         except Exception as e:
-            self.video_title_label.configure(text="Không thể lấy thông tin video (Hoặc link bị lỗi)")
-            self.video_duration_label.configure(text="")
-            self.thumbnail_label.configure(image="", text="Lỗi")
+            self._ui(lambda: self.video_title_label.configure(text="Không thể lấy thông tin video (Hoặc link bị lỗi)"))
+            self._ui(lambda: self.video_duration_label.configure(text=""))
+            self._ui(lambda: self.thumbnail_label.configure(image="", text="Lỗi"))
 
     def cancel_download(self):
         self.is_cancelled = True
@@ -479,11 +514,11 @@ class YouTubeDownloaderApp(ctk.CTk):
             try:
                 clean_str = p_str.replace('%', '')
                 percent_float = float(clean_str) / 100.0
-                self.progress_bar.set(percent_float)
+                self._set_progress(percent_float)
                 
                 speed = d.get('_speed_str', 'N/A')
                 eta = d.get('_eta_str', 'N/A')
-                self.status_label.configure(text=f"{prefix}Đang tải... {p_str}  |  Tốc độ: {speed}  |  Còn lại: {eta}")
+                self._set_status(f"{prefix}Đang tải... {p_str}  |  Tốc độ: {speed}  |  Còn lại: {eta}")
             except Exception as e:
                 pass
                 
@@ -491,10 +526,10 @@ class YouTubeDownloaderApp(ctk.CTk):
             playlist_idx = d.get('info_dict', {}).get('playlist_index')
             playlist_count = d.get('info_dict', {}).get('playlist_count')
             if playlist_idx and playlist_count and playlist_idx < playlist_count:
-                self.status_label.configure(text=f"[Video {playlist_idx}/{playlist_count}] Tải xong! Đang chuyển sang video tiếp theo...")
+                self._set_status(f"[Video {playlist_idx}/{playlist_count}] Tải xong! Đang chuyển sang video tiếp theo...")
             else:
-                self.status_label.configure(text="Tải xong! Đang xử lý file cuối cùng (nếu có)...")
-            self.progress_bar.set(1.0)
+                self._set_status("Tải xong! Đang xử lý file cuối cùng (nếu có)...")
+            self._set_progress(1.0)
 
     def _render_history_item(self, title, download_folder):
         import os
@@ -611,22 +646,22 @@ class YouTubeDownloaderApp(ctk.CTk):
     def _process_queue_thread(self):
         self.is_downloading = True
         self.is_cancelled = False
-        self.cancel_btn.configure(state="normal")
+        self._ui(lambda: self.cancel_btn.configure(state="normal"))
         
         has_errors = False
         
         while len(self.download_queue) > 0:
             task = self.download_queue.pop(0)
             
-            self.after(0, self.refresh_queue_ui)
+            self._ui(self.refresh_queue_ui)
             
             if self.is_cancelled:
                 break
                 
             pending = len(self.download_queue)
             
-            self.status_label.configure(text=f"Đang tiến hành tải... (Còn {pending} mục đang đợi xếp hàng)", text_color="gray")
-            self.progress_bar.set(0)
+            self._set_status(f"Đang tiến hành tải... (Còn {pending} mục đang đợi xếp hàng)", "gray")
+            self._set_progress(0)
             
             success = self._execute_download(task)
             if not success:
@@ -636,7 +671,7 @@ class YouTubeDownloaderApp(ctk.CTk):
                 break
                 
         self.is_downloading = False
-        self.cancel_btn.configure(state="disabled")
+        self._ui(lambda: self.cancel_btn.configure(state="disabled"))
         
         if self.is_cancelled:
             pass # Keep the cancel message
@@ -644,8 +679,8 @@ class YouTubeDownloaderApp(ctk.CTk):
             # Leave the error message on screen
             pass
         else:
-            self.status_label.configure(text="Tuyệt vời! Toàn bộ Hàng Đợi đã được tải xong.", text_color="green")
-            self.progress_bar.set(1.0)
+            self._set_status("Tuyệt vời! Toàn bộ Hàng Đợi đã được tải xong.", "green")
+            self._set_progress(1.0)
             
         # Check if queue has items added while cancelling
         if len(self.download_queue) > 0 and not self.is_cancelled:
@@ -694,9 +729,11 @@ class YouTubeDownloaderApp(ctk.CTk):
                 'noplaylist': not is_playlist, 
                 'quiet': True,
                 'no_warnings': True,
-                'ffmpeg_location': ffmpeg_dir,
                 'format': self._get_format_string(format_choice)
             }
+            # Chỉ set khi tìm thấy ffmpeg; nếu None để yt-dlp tự dò trong PATH
+            if ffmpeg_dir:
+                ydl_opts['ffmpeg_location'] = ffmpeg_dir
             
             if 'playlist_items' in task:
                 ydl_opts['playlist_items'] = task['playlist_items']
@@ -793,22 +830,22 @@ class YouTubeDownloaderApp(ctk.CTk):
                             pass
     
                     if cleaned:
-                        self.status_label.configure(text="Đã hủy & tự động dọn rác!", text_color="orange")
+                        self._set_status("Đã hủy & tự động dọn rác!", "orange")
                     else:
-                        self.status_label.configure(text="Đã hủy tải.", text_color="orange")
+                        self._set_status("Đã hủy tải.", "orange")
                     return False
                     
                 elif task['subtitle_opt'] and ("subtitles" in err_str.lower() or "429" in err_str):
                     # Tự động Retry nhưng tắt phụ đề
                     task['subtitle_opt'] = False
                     retry_without_subtitles = True
-                    self.status_label.configure(text="Mạng hạn chế tải Phụ Đề (Lỗi 429). Đang tải lại video KHÔNG Phụ Đề...", text_color="orange")
+                    self._set_status("Mạng hạn chế tải Phụ Đề (Lỗi 429). Đang tải lại video KHÔNG Phụ Đề...", "orange")
                     continue # Quay lại vòng lặp while True để tải lại
                     
                 else:
                     import re
                     clean_msg = re.sub(r'\x1b\[[0-9;]*m', '', err_str)
-                    self.status_label.configure(text=f"Lỗi tải link {url[:15]}...: {clean_msg[:100]}", text_color="red")
+                    self._set_status(f"Lỗi tải link {url[:15]}...: {clean_msg[:100]}", "red")
                     return False
             return False
 

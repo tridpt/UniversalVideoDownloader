@@ -31,9 +31,9 @@ Ensure you have **Python 3.8+** installed on your system.
 2. **Install dependencies:**
    Install required Python packages utilizing `pip`:
    ```bash
-   pip install customtkinter yt-dlp Pillow requests 
+   pip install customtkinter yt-dlp Pillow requests static_ffmpeg
    ```
-   *Note: Ensure you have FFmpeg available in your PATH or update the FFmpeg binary path inside `main.py` (e.g. via `static_ffmpeg`)*.
+   *Note on FFmpeg: The app automatically locates FFmpeg from the `static_ffmpeg` package if installed. Otherwise, it falls back to any `ffmpeg` available on your system `PATH`. No manual path editing is required.*
 
 3. **Run the App:**
    ```bash
