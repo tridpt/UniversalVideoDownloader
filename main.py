@@ -38,6 +38,10 @@ class YouTubeDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
+        # Nạp cấu hình đã lưu từ lần dùng trước (thư mục tải, định dạng, tùy chọn...)
+        self.config_file = os.path.join(os.path.expanduser('~'), '.univideo_config.json')
+        self.app_config = self._load_config()
+
         self.title("Universal Video Downloader")
         self.geometry("1100x820")
         self.resizable(False, False)
@@ -76,7 +80,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.folder_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.folder_frame.pack(padx=20, pady=10)
         
-        self.save_dir = ctk.StringVar(value=os.path.join(os.path.expanduser('~'), 'Downloads'))
+        self.save_dir = ctk.StringVar(value=self.app_config.get('save_dir', os.path.join(os.path.expanduser('~'), 'Downloads')))
         
         self.dir_entry = ctk.CTkEntry(self.folder_frame, textvariable=self.save_dir, width=300, height=35, state="disabled")
         self.dir_entry.pack(side="left", padx=(0, 10))
@@ -84,7 +88,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.btn_browse = ctk.CTkButton(self.folder_frame, text="Chọn Thư Mục", width=110, height=35, command=self.browse_folder, fg_color="gray30", hover_color="gray40")
         self.btn_browse.pack(side="left", padx=(0, 15))
 
-        self.smart_folder_var = ctk.BooleanVar(value=True)
+        self.smart_folder_var = ctk.BooleanVar(value=self.app_config.get('smart_folder', True))
         self.smart_folder_cb = ctk.CTkCheckBox(self.folder_frame, text="Phân loại nền tảng ngầm (VD: /Youtube)", variable=self.smart_folder_var, font=ctk.CTkFont(size=12, weight="bold"))
         self.smart_folder_cb.pack(side="left")
 
@@ -92,7 +96,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.options_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.options_frame.pack(padx=20, pady=10)
 
-        self.format_var = ctk.StringVar(value="Video - Tốt nhất")
+        self.format_var = ctk.StringVar(value=self.app_config.get('format_choice', "Video - Tốt nhất"))
         self.format_menu = ctk.CTkOptionMenu(
             self.options_frame, 
             values=["Video - Tốt nhất", "Video - 1080p", "Video - 720p", "Video - 480p", "Âm thanh (MP3)"], 
@@ -130,13 +134,13 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.adv_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.adv_frame.pack(padx=20, pady=(0, 10))
 
-        self.subtitle_var = ctk.BooleanVar(value=False)
+        self.subtitle_var = ctk.BooleanVar(value=self.app_config.get('subtitle', False))
         self.subtitle_checkbox = ctk.CTkCheckBox(
             self.adv_frame, text="Tải kèm Phụ đề (Nếu có)", variable=self.subtitle_var, font=ctk.CTkFont(size=12)
         )
         self.subtitle_checkbox.pack(side="left", padx=10)
 
-        self.thumbnail_var = ctk.BooleanVar(value=True)
+        self.thumbnail_var = ctk.BooleanVar(value=self.app_config.get('thumbnail', True))
         self.thumbnail_checkbox = ctk.CTkCheckBox(
             self.adv_frame, text="Gắn Ảnh Bìa (vào MP3/MP4)", variable=self.thumbnail_var, font=ctk.CTkFont(size=12)
         )
@@ -201,7 +205,15 @@ class YouTubeDownloaderApp(ctk.CTk):
             self.theme_frame, text="", command=self.change_appearance_mode_event, width=40
         )
         self.appearance_mode_switch.pack(side="right")
-        self.appearance_mode_switch.select()
+        # Khôi phục chế độ giao diện đã lưu (mặc định: Tối)
+        if self.app_config.get('appearance_mode', 'Dark') == 'Dark':
+            self.appearance_mode_switch.select()
+            ctk.set_appearance_mode("Dark")
+            self.theme_label.configure(text="Chế độ Tối 🌙")
+        else:
+            self.appearance_mode_switch.deselect()
+            ctk.set_appearance_mode("Light")
+            self.theme_label.configure(text="Chế độ Sáng ☀️")
 
         self.queue_title = ctk.CTkLabel(self.history_frame, text="⏳ HÀNG ĐỢI TẢI (ĐANG CHỜ)", font=ctk.CTkFont(size=14, weight="bold"), text_color="#f39c12")
         self.queue_title.pack(pady=(5, 5))
@@ -223,6 +235,38 @@ class YouTubeDownloaderApp(ctk.CTk):
         
         self.history_file = os.path.join(os.path.expanduser('~'), '.univideo_history.json')
         self.load_history_from_file()
+
+        # Lưu cấu hình khi đóng cửa sổ
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _load_config(self):
+        import json
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception:
+            pass
+        return {}
+
+    def _save_config(self):
+        import json
+        try:
+            data = {
+                'save_dir': self.save_dir.get(),
+                'format_choice': self.format_var.get(),
+                'smart_folder': self.smart_folder_var.get(),
+                'thumbnail_opt': self.thumbnail_var.get(),
+                'appearance_mode': 'Dark' if self.appearance_mode_switch.get() == 1 else 'Light',
+            }
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+        except Exception:
+            pass
+
+    def _on_close(self):
+        self._save_config()
+        self.destroy()
 
     def _ui(self, func):
         """Lên lịch chạy 1 hàm cập nhật giao diện trên main thread (Tkinter không an toàn đa luồng)."""
@@ -556,23 +600,48 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.load_history_from_file()
 
 
+    def _parse_time(self, t_str):
+        """Chuyển chuỗi thời gian (HH:MM:SS / MM:SS / SS) thành giây.
+        Trả về (seconds | None, error_message | None)."""
+        t_str = (t_str or "").strip()
+        if not t_str:
+            return None, None  # Bỏ trống là hợp lệ (không cắt)
+
+        parts = t_str.split(':')
+        if len(parts) > 3:
+            return None, f"Thời gian '{t_str}' sai định dạng (dùng HH:MM:SS, MM:SS hoặc SS)"
+
+        sec = 0.0
+        for i, part in enumerate(reversed(parts)):
+            part = part.strip()
+            if part == "":
+                return None, f"Thời gian '{t_str}' sai định dạng (có ô trống)"
+            try:
+                value = float(part)
+            except ValueError:
+                return None, f"Thời gian '{t_str}' chứa ký tự không hợp lệ"
+            if value < 0:
+                return None, f"Thời gian '{t_str}' không được âm"
+            sec += value * (60 ** i)
+        return sec, None
+
     def add_to_queue(self):
         url = self.url_var.get().strip()
         if not url or not url.startswith("http"):
-            self.status_label.configure(text="Lỗi: Vui lòng dán một đường link hợp lệ!")
-            self.status_label.configure(text_color="red")
+            self.status_label.configure(text="Lỗi: Vui lòng dán một đường link hợp lệ!", text_color="red")
             return
 
-        def time_to_sec(t_str):
-            if not t_str: return None
-            parts = reversed(t_str.strip().split(':'))
-            sec = 0
-            for i, part in enumerate(parts):
-                try:
-                    sec += float(part) * (60 ** i)
-                except ValueError:
-                    pass
-            return sec
+        start_sec, start_err = self._parse_time(self.start_var.get())
+        if start_err:
+            self.status_label.configure(text=f"Lỗi thời gian cắt (Từ): {start_err}", text_color="red")
+            return
+        end_sec, end_err = self._parse_time(self.end_var.get())
+        if end_err:
+            self.status_label.configure(text=f"Lỗi thời gian cắt (Đến): {end_err}", text_color="red")
+            return
+        if start_sec is not None and end_sec is not None and end_sec <= start_sec:
+            self.status_label.configure(text="Lỗi: Thời gian 'Đến' phải lớn hơn 'Từ'", text_color="red")
+            return
 
         task = {
             'url': url,
@@ -582,8 +651,8 @@ class YouTubeDownloaderApp(ctk.CTk):
             'cookie_opt': self._get_cookie_opts(),
             'subtitle_opt': self.subtitle_var.get(),
             'thumbnail_opt': self.thumbnail_var.get(),
-            'start_sec': time_to_sec(self.start_var.get()),
-            'end_sec': time_to_sec(self.end_var.get()),
+            'start_sec': start_sec,
+            'end_sec': end_sec,
             'smart_folder': self.smart_folder_var.get()
         }
         
