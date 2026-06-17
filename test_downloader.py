@@ -126,8 +126,8 @@ class TestConfigStore:
 
     def test_add_history_inserts_at_front(self, tmp_path):
         p = str(tmp_path / "h.json")
-        config_store.add_history("First", "/a", p)
-        config_store.add_history("Second", "/b", p)
+        config_store.add_history("First", "/a", path=p)
+        config_store.add_history("Second", "/b", path=p)
         data = config_store.load_history(p)
         assert data[0]['title'] == "Second"
         assert data[1]['title'] == "First"
@@ -135,13 +135,19 @@ class TestConfigStore:
     def test_add_history_respects_max(self, tmp_path):
         p = str(tmp_path / "h.json")
         for i in range(10):
-            config_store.add_history(f"T{i}", "/x", p, max_items=5)
+            config_store.add_history(f"T{i}", "/x", path=p, max_items=5)
         data = config_store.load_history(p)
         assert len(data) == 5
         assert data[0]['title'] == "T9"
 
+    def test_add_history_with_filepath(self, tmp_path):
+        p = str(tmp_path / "h.json")
+        config_store.add_history("Vid", "/folder", filepath="/folder/vid.mp4", path=p)
+        data = config_store.load_history(p)
+        assert data[0]['filepath'] == "/folder/vid.mp4"
+
     def test_clear_history(self, tmp_path):
         p = str(tmp_path / "h.json")
-        config_store.add_history("X", "/x", p)
+        config_store.add_history("X", "/x", path=p)
         assert config_store.clear_history(p) is True
         assert config_store.load_history(p) == []

@@ -23,6 +23,9 @@ class YouTubeDownloaderApp(ctk.CTk):
 
         # Nạp cấu hình đã lưu từ lần dùng trước (thư mục tải, định dạng, tùy chọn...)
         self.app_config = config_store.load_config()
+        # Số luồng tải song song mong muốn (1 = tuần tự như cũ)
+        self.concurrency_var = ctk.StringVar(value=str(self.app_config.get('concurrency', 1)))
+        self._concurrent_active = 1  # Số task đang tải song song (cập nhật lúc chạy)
 
         self.title("Universal Video Downloader")
         self.geometry("1100x820")
@@ -130,6 +133,14 @@ class YouTubeDownloaderApp(ctk.CTk):
             self.adv_frame, text="Gắn Ảnh Bìa (vào MP3/MP4)", variable=self.thumbnail_var, font=ctk.CTkFont(size=12)
         )
         self.thumbnail_checkbox.pack(side="left", padx=10)
+
+        self.concurrency_label = ctk.CTkLabel(self.adv_frame, text=" | Tải song song:", font=ctk.CTkFont(size=12))
+        self.concurrency_label.pack(side="left", padx=(5, 2))
+        self.concurrency_menu = ctk.CTkOptionMenu(
+            self.adv_frame, values=["1", "2", "3", "4"], variable=self.concurrency_var,
+            width=55, height=28, font=ctk.CTkFont(size=12)
+        )
+        self.concurrency_menu.pack(side="left", padx=2)
         
         self.time_label = ctk.CTkLabel(self.adv_frame, text=" |  Cắt từ:", font=ctk.CTkFont(size=12))
         self.time_label.pack(side="left", padx=(5, 2))
@@ -159,7 +170,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.is_cancelled = False
         self.is_downloading = False
         self.download_queue = [] # Khởi tạo danh sách hàng đợi
-        self.temp_files = [] # Lấy danh sách file rác tải dở
+        self.temp_files = [] # (giữ lại cho tương thích; state tải nay theo từng task)
         self.failed_tasks = [] # Các task tải lỗi để hiển thị nút "Thử lại"
         
         # --- Nhãn trạng thái ---
@@ -240,6 +251,26 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.after(400, self._check_clipboard_for_link)
         self.bind("<FocusIn>", lambda e: self._check_clipboard_for_link())
 
+        # Bật kéo-thả link/file vào cửa sổ (nếu có tkinterdnd2)
+        self._setup_drag_drop()
+
+    def _setup_drag_drop(self):
+        """Bật kéo-thả văn bản/đường dẫn vào ô link. Bỏ qua nếu thiếu tkinterdnd2."""
+        try:
+            from tkinterdnd2 import TkinterDnD, DND_TEXT, DND_FILES
+            TkinterDnD._require(self)  # Khởi tạo tkdnd cho cửa sổ CTk hiện có
+
+            def on_drop(event):
+                data = (event.data or "").strip().strip('{}')
+                if data:
+                    self.url_var.set(data)
+                    self._set_status("Đã nhận link/đường dẫn được kéo vào.", "gray")
+
+            self.url_entry.drop_target_register(DND_TEXT, DND_FILES)
+            self.url_entry.dnd_bind('<<Drop>>', on_drop)
+        except Exception:
+            pass  # Không có tkinterdnd2 -> bỏ qua, app vẫn chạy bình thường
+
     def _load_config(self):
         return config_store.load_config()
 
@@ -251,6 +282,7 @@ class YouTubeDownloaderApp(ctk.CTk):
             'thumbnail_opt': self.thumbnail_var.get(),
             'subtitle_opt': self.subtitle_var.get(),
             'cookie_choice': self.cookie_var.get(),
+            'concurrency': self._get_concurrency(),
             'appearance_mode': 'Dark' if self.appearance_mode_switch.get() == 1 else 'Light',
         }
         config_store.save_config(data)
@@ -276,6 +308,24 @@ class YouTubeDownloaderApp(ctk.CTk):
     def _set_progress(self, value):
         """Cập nhật thanh tiến trình an toàn từ thread phụ."""
         self._ui(lambda: self.progress_bar.set(value))
+
+    def _notify(self, title, message):
+        """Hiện thông báo hệ thống (toast). Bỏ qua lặng lẽ nếu không hỗ trợ."""
+        try:
+            from plyer import notification
+            notification.notify(title=title, message=message,
+                                 app_name="Universal Video Downloader", timeout=10)
+        except Exception:
+            pass
+
+    def _notify(self, title, message):
+        """Hiện thông báo hệ thống (toast). Lặng lẽ bỏ qua nếu không hỗ trợ."""
+        try:
+            from plyer import notification
+            notification.notify(title=title, message=message,
+                                 app_name="Universal Video Downloader", timeout=8)
+        except Exception:
+            pass
 
     def _show_playlist_progress(self, show):
         """Hiện/ẩn thanh tiến trình tổng của playlist."""
@@ -399,10 +449,10 @@ class YouTubeDownloaderApp(ctk.CTk):
 
     def load_history_from_file(self):
         for item in config_store.load_history():
-            self._render_history_item(item.get('title', ''), item.get('path', ''))
+            self._render_history_item(item.get('title', ''), item.get('path', ''), item.get('filepath'))
 
-    def save_history_to_file(self, title, path):
-        config_store.add_history(title, path)
+    def save_history_to_file(self, title, path, filepath=None):
+        config_store.add_history(title, path, filepath=filepath)
 
     def clear_history_data(self):
         config_store.clear_history()
@@ -622,55 +672,98 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.status_label.configure(text="Đang dừng và hủy toàn bộ...", text_color="orange")
         self.cancel_btn.configure(state="disabled")
 
-    def my_hook(self, d):
-        if d.get('info_dict'):
-            self.current_filename = d['info_dict'].get('_filename')
-            
-        if self.is_cancelled:
-            raise Exception("CANCELLED_BY_USER")
-            
-        if d['status'] == 'downloading':
-            tmp = d.get('tmpfilename')
-            if tmp and tmp not in self.temp_files:
-                self.temp_files.append(tmp)
+    def _make_progress_hook(self, state):
+        """Tạo progress hook riêng cho 1 task (an toàn khi tải song song).
 
-            p_str = d.get('_percent_str', '0%').replace('\x1b[0;94m', '').replace('\x1b[0m', '').strip()
-            
-            playlist_idx = d.get('info_dict', {}).get('playlist_index')
-            playlist_count = d.get('info_dict', {}).get('playlist_count')
-            prefix = f"[Video {playlist_idx}/{playlist_count}] " if playlist_idx and playlist_count else ""
+        state: dict giữ 'temp_files' và 'current_filename' riêng của task này.
+        """
+        def hook(d):
+            if d.get('info_dict'):
+                state['current_filename'] = d['info_dict'].get('_filename')
 
-            if playlist_idx and playlist_count:
-                self._set_playlist_progress(playlist_idx, playlist_count)
+            if self.is_cancelled:
+                raise Exception("CANCELLED_BY_USER")
 
-            try:
-                clean_str = p_str.replace('%', '')
-                percent_float = float(clean_str) / 100.0
-                self._set_progress(percent_float)
-                
-                speed = d.get('_speed_str', 'N/A')
-                eta = d.get('_eta_str', 'N/A')
-                self._set_status(f"{prefix}Đang tải... {p_str}  |  Tốc độ: {speed}  |  Còn lại: {eta}")
-            except Exception as e:
-                pass
-                
-        elif d['status'] == 'finished':
-            playlist_idx = d.get('info_dict', {}).get('playlist_index')
-            playlist_count = d.get('info_dict', {}).get('playlist_count')
-            if playlist_idx and playlist_count:
-                self._set_playlist_progress(playlist_idx, playlist_count)
-            if playlist_idx and playlist_count and playlist_idx < playlist_count:
-                self._set_status(f"[Video {playlist_idx}/{playlist_count}] Tải xong! Đang chuyển sang video tiếp theo...")
-            else:
-                self._set_status("Tải xong! Đang xử lý file cuối cùng (nếu có)...")
-            self._set_progress(1.0)
+            if d['status'] == 'downloading':
+                tmp = d.get('tmpfilename')
+                if tmp and tmp not in state['temp_files']:
+                    state['temp_files'].append(tmp)
 
-    def _render_history_item(self, title, download_folder):
+                # Khi tải song song, không cập nhật thanh % đơn lẻ (gây nhảy loạn)
+                if self._concurrent_active > 1:
+                    return
+
+                p_str = d.get('_percent_str', '0%').replace('\x1b[0;94m', '').replace('\x1b[0m', '').strip()
+
+                playlist_idx = d.get('info_dict', {}).get('playlist_index')
+                playlist_count = d.get('info_dict', {}).get('playlist_count')
+                prefix = f"[Video {playlist_idx}/{playlist_count}] " if playlist_idx and playlist_count else ""
+
+                if playlist_idx and playlist_count:
+                    self._set_playlist_progress(playlist_idx, playlist_count)
+
+                try:
+                    clean_str = p_str.replace('%', '')
+                    percent_float = float(clean_str) / 100.0
+                    self._set_progress(percent_float)
+
+                    speed = d.get('_speed_str', 'N/A')
+                    eta = d.get('_eta_str', 'N/A')
+                    self._set_status(f"{prefix}Đang tải... {p_str}  |  Tốc độ: {speed}  |  Còn lại: {eta}")
+                except Exception:
+                    pass
+
+            elif d['status'] == 'finished':
+                if self._concurrent_active > 1:
+                    return
+                playlist_idx = d.get('info_dict', {}).get('playlist_index')
+                playlist_count = d.get('info_dict', {}).get('playlist_count')
+                if playlist_idx and playlist_count:
+                    self._set_playlist_progress(playlist_idx, playlist_count)
+                if playlist_idx and playlist_count and playlist_idx < playlist_count:
+                    self._set_status(f"[Video {playlist_idx}/{playlist_count}] Tải xong! Đang chuyển sang video tiếp theo...")
+                else:
+                    self._set_status("Tải xong! Đang xử lý file cuối cùng (nếu có)...")
+                self._set_progress(1.0)
+        return hook
+
+    def _resolve_final_filepath(self, info, download_folder):
+        """Suy ra đường dẫn file cuối cùng sau khi tải (xét cả chuyển sang .mp3)."""
+        try:
+            # yt-dlp cung cấp đường dẫn các file đã tải
+            candidate = None
+            requested = info.get('requested_downloads')
+            if requested and isinstance(requested, list):
+                candidate = requested[0].get('filepath') or requested[0].get('_filename')
+            if not candidate:
+                candidate = info.get('_filename') or info.get('filename')
+
+            if not candidate:
+                return None
+
+            # Nếu là MP3: yt-dlp đổi đuôi sau hậu xử lý
+            if self.format_var.get() == "Âm thanh (MP3)":
+                base = os.path.splitext(candidate)[0]
+                mp3 = base + ".mp3"
+                if os.path.exists(mp3):
+                    return mp3
+            # Nếu merge sang mp4
+            if os.path.exists(candidate):
+                return candidate
+            base = os.path.splitext(candidate)[0]
+            for ext in ['.mp4', '.mkv', '.webm', '.m4a', '.mp3']:
+                if os.path.exists(base + ext):
+                    return base + ext
+            return candidate
+        except Exception:
+            return None
+
+    def _render_history_item(self, title, download_folder, filepath=None):
         import os
         item_frame = ctk.CTkFrame(self.history_scroll, corner_radius=5)
         item_frame.pack(fill="x", pady=2)
         
-        lbl = ctk.CTkLabel(item_frame, text="✅ " + (title[:30] + "..." if len(title) > 30 else title), font=ctk.CTkFont(size=11))
+        lbl = ctk.CTkLabel(item_frame, text="✅ " + (title[:26] + "..." if len(title) > 26 else title), font=ctk.CTkFont(size=11))
         lbl.pack(side="left", padx=5, pady=5)
         
         def open_folder():
@@ -678,12 +771,24 @@ class YouTubeDownloaderApp(ctk.CTk):
                 os.startfile(download_folder)
             except Exception:
                 pass
-                
-        btn = ctk.CTkButton(item_frame, text="📂 Mở", width=40, height=22, font=ctk.CTkFont(size=11), fg_color="#2980b9", hover_color="#3498db", command=open_folder)
-        btn.pack(side="right", padx=5, pady=5)
 
-    def add_history_item(self, title, download_folder):
-        self.save_history_to_file(title, download_folder)
+        def open_file():
+            try:
+                os.startfile(filepath)
+            except Exception:
+                # Nếu mở file lỗi (đã xóa/di chuyển), mở thư mục thay thế
+                open_folder()
+
+        btn = ctk.CTkButton(item_frame, text="📂", width=32, height=22, font=ctk.CTkFont(size=11), fg_color="#2980b9", hover_color="#3498db", command=open_folder)
+        btn.pack(side="right", padx=(2, 5), pady=5)
+
+        # Chỉ hiện nút mở file nếu có đường dẫn file thật và file còn tồn tại
+        if filepath and os.path.exists(filepath):
+            btn_play = ctk.CTkButton(item_frame, text="▶ Mở file", width=64, height=22, font=ctk.CTkFont(size=11), fg_color="#27ae60", hover_color="#2ecc71", command=open_file)
+            btn_play.pack(side="right", padx=2, pady=5)
+
+    def add_history_item(self, title, download_folder, filepath=None):
+        self.save_history_to_file(title, download_folder, filepath)
         
         for widget in self.history_scroll.winfo_children():
             widget.destroy()
@@ -782,46 +887,70 @@ class YouTubeDownloaderApp(ctk.CTk):
         if not self.is_downloading:
             threading.Thread(target=self._process_queue_thread, daemon=True).start()
 
+    def _get_concurrency(self):
+        """Đọc số luồng song song mong muốn (1-4), mặc định 1 nếu lỗi."""
+        try:
+            n = int(self.concurrency_var.get())
+            return max(1, min(4, n))
+        except Exception:
+            return 1
+
     def _process_queue_thread(self):
         self.is_downloading = True
         self.is_cancelled = False
         self._ui(lambda: self.cancel_btn.configure(state="normal"))
-        
+
         has_errors = False
-        
-        while len(self.download_queue) > 0:
-            task = self.download_queue.pop(0)
-            
-            self._ui(self.refresh_queue_ui)
-            
-            if self.is_cancelled:
-                break
-                
-            pending = len(self.download_queue)
-            
-            self._set_status(f"Đang tiến hành tải... (Còn {pending} mục đang đợi xếp hàng)", "gray")
+        concurrency = self._get_concurrency()
+
+        if concurrency <= 1:
+            # Chế độ tuần tự (như cũ)
+            self._concurrent_active = 1
+            while len(self.download_queue) > 0:
+                task = self.download_queue.pop(0)
+                self._ui(self.refresh_queue_ui)
+                if self.is_cancelled:
+                    break
+                pending = len(self.download_queue)
+                self._set_status(f"Đang tiến hành tải... (Còn {pending} mục đang đợi xếp hàng)", "gray")
+                self._set_progress(0)
+                if not self._execute_download(task):
+                    has_errors = True
+                if self.is_cancelled:
+                    break
+        else:
+            # Chế độ song song: tải nhiều task cùng lúc bằng thread pool
+            from concurrent.futures import ThreadPoolExecutor
             self._set_progress(0)
-            
-            success = self._execute_download(task)
-            if not success:
-                has_errors = True
-            
-            if self.is_cancelled:
-                break
-                
+            with ThreadPoolExecutor(max_workers=concurrency) as executor:
+                while self.download_queue and not self.is_cancelled:
+                    batch = []
+                    while self.download_queue and len(batch) < concurrency:
+                        batch.append(self.download_queue.pop(0))
+                    self._ui(self.refresh_queue_ui)
+                    self._concurrent_active = len(batch)
+                    remaining = len(self.download_queue)
+                    self._set_status(
+                        f"Đang tải song song {len(batch)} video... (Còn {remaining} mục chờ)", "gray")
+                    results = list(executor.map(self._execute_download, batch))
+                    if not all(results):
+                        has_errors = True
+            self._concurrent_active = 1
+
         self.is_downloading = False
         self._ui(lambda: self.cancel_btn.configure(state="disabled"))
         self._show_playlist_progress(False)  # Ẩn thanh tổng playlist khi xong hàng đợi
-        
+
         if self.is_cancelled:
             pass # Keep the cancel message
         elif has_errors:
             # Leave the error message on screen
-            pass
+            self._notify("Tải hoàn tất (có lỗi)", "Một số mục tải lỗi. Xem mục 'Tải lỗi' để thử lại.")
         else:
             self._set_status("Tuyệt vời! Toàn bộ Hàng Đợi đã được tải xong.", "green")
             self._set_progress(1.0)
-            
+            self._notify("Tải hoàn tất", "Toàn bộ hàng đợi đã được tải xong!")
+
         # Check if queue has items added while cancelling
         if len(self.download_queue) > 0 and not self.is_cancelled:
             threading.Thread(target=self._process_queue_thread, daemon=True).start()
@@ -850,7 +979,9 @@ class YouTubeDownloaderApp(ctk.CTk):
         out_template = downloader.build_out_template(download_folder, is_playlist)
 
         retry_without_subtitles = False
-        
+        # State riêng cho task này (an toàn khi tải song song)
+        state = {'temp_files': [], 'current_filename': None}
+
         while True:
             ffmpeg_dir = get_ffmpeg_path()
 
@@ -867,11 +998,11 @@ class YouTubeDownloaderApp(ctk.CTk):
             ydl_opts = downloader.build_ydl_opts(
                 task, out_template,
                 ffmpeg_dir=ffmpeg_dir,
-                progress_hook=self.my_hook,
+                progress_hook=self._make_progress_hook(state),
                 download_ranges=download_ranges,
             )
 
-            self.temp_files = [] 
+            state['temp_files'] = []
     
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -879,22 +1010,25 @@ class YouTubeDownloaderApp(ctk.CTk):
                     if is_playlist:
                         downloaded_title = "Playlist/Kênh: " + info.get('title', 'Nhiều video')
                         history_folder = os.path.join(download_folder, info.get('title', ''))
+                        final_filepath = None  # Playlist nhiều file, không mở 1 file cụ thể
                     else:
                         downloaded_title = info.get('title', 'Video Mới Tải')
                         history_folder = download_folder
+                        # Lấy đường dẫn file cuối cùng để có thể mở trực tiếp
+                        final_filepath = self._resolve_final_filepath(info, download_folder)
                     
                 if not self.is_cancelled:
                     if retry_without_subtitles:
                         downloaded_title = downloaded_title + " (Không Phụ Đề)"
                         
-                    self.after(0, self.add_history_item, downloaded_title, history_folder)
+                    self.after(0, self.add_history_item, downloaded_title, history_folder, final_filepath)
                     return True
     
             except Exception as e:
                 err_str = str(e)
                 if "CANCELLED_BY_USER" in err_str:
                     cleaned = False
-                    for f in self.temp_files:
+                    for f in state['temp_files']:
                         try:
                             if os.path.exists(f):
                                 os.remove(f)
@@ -915,8 +1049,8 @@ class YouTubeDownloaderApp(ctk.CTk):
                                             cleaned = True
                                             
                             # 2. Clean thumbnails and media starting with exact base_name from yt-dlp info_dict
-                            if hasattr(self, 'current_filename') and self.current_filename:
-                                base_name = os.path.splitext(self.current_filename)[0]
+                            if state.get('current_filename'):
+                                base_name = os.path.splitext(state['current_filename'])[0]
                                 possible_exts = ['.webp', '.jpg', '.png', '.mp4', '.m4a', '.webm', '.mp3', '.part', '.ytdl']
                                 for ext in possible_exts:
                                     target = base_name + ext

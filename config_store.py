@@ -47,10 +47,16 @@ def load_history(path=HISTORY_FILE):
     return []
 
 
-def add_history(title, folder, path=HISTORY_FILE, max_items=MAX_HISTORY):
-    """Thêm 1 mục vào đầu lịch sử, giới hạn max_items. Trả về list sau khi cập nhật."""
+def add_history(title, folder, filepath=None, path=HISTORY_FILE, max_items=MAX_HISTORY):
+    """Thêm 1 mục vào đầu lịch sử, giới hạn max_items. Trả về list sau khi cập nhật.
+
+    filepath (tùy chọn): đường dẫn file thật để có thể mở trực tiếp.
+    """
     data = load_history(path)
-    data.insert(0, {'title': title, 'path': folder})
+    item = {'title': title, 'path': folder}
+    if filepath:
+        item['filepath'] = filepath
+    data.insert(0, item)
     if len(data) > max_items:
         data = data[:max_items]
     try:

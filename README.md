@@ -19,6 +19,10 @@ A powerful, modern, and cross-platform video and audio downloader built with Pyt
   * Time-based cutting/cropping: Download specific parts of a video by specifying start and end times.
   * Browser Cookie integration: Bypass age-restricted or private content by using cookies from your installed browsers (Chrome, Edge, Firefox, Brave).
 * **Download Queue & History**: Queue up multiple downloads at once. Easily review your download history and quickly open download folders.
+* **Desktop Notifications**: Get a system notification when the whole queue finishes.
+* **Concurrent Downloads**: Download up to 4 videos in parallel for long queues.
+* **Drag & Drop**: Drop a link or file path onto the input box (requires optional `tkinterdnd2`).
+* **Open File Directly**: Open the finished file (not just its folder) straight from the history list.
 
 ## 🚀 Installation & Requirements
 
@@ -36,6 +40,13 @@ Ensure you have **Python 3.8+** installed on your system.
    pip install customtkinter yt-dlp Pillow requests static_ffmpeg
    ```
    *Note on FFmpeg: The app automatically locates FFmpeg from the `static_ffmpeg` package if installed. Otherwise, it falls back to any `ffmpeg` available on your system `PATH`. No manual path editing is required.*
+
+   Optional extras:
+   ```bash
+   pip install plyer        # desktop notifications when downloads finish
+   pip install tkinterdnd2  # drag & drop links/files onto the window
+   ```
+   *Both are optional — the app runs fine without them, just without those specific features.*
 
 3. **Run the App:**
    ```bash
