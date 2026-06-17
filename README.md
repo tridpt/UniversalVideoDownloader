@@ -1,5 +1,7 @@
 # Universal Video Downloader
 
+[![Tests](https://github.com/tridpt/UniversalVideoDownloader/actions/workflows/tests.yml/badge.svg)](https://github.com/tridpt/UniversalVideoDownloader/actions/workflows/tests.yml)
+
 A powerful, modern, and cross-platform video and audio downloader built with Python and CustomTkinter. It leverages the robust `yt-dlp` library to provide seamless downloading capabilities from almost any platform, including YouTube, Facebook, TikTok, Instagram, Twitter (X), and SoundCloud.
 
 ![Universal Video Downloader UI](#) *(Add your screenshot here)*
@@ -46,6 +48,29 @@ Ensure you have **Python 3.8+** installed on your system.
 2. **Choose Format**: Select your desired quality or select 'Audio (MP3)'.
 3. **Save Directory**: Choose where you want to save the files. Checking 'Smart Folder' will auto-create subfolders based on the website.
 4. **Download**: Hit "Tải / Tải Thêm" to queue the video. You can queue multiple links simultaneously. 
+
+## 🗂️ Project Structure
+
+The codebase is split into focused modules to keep logic testable and the UI thin:
+
+| File | Responsibility |
+| --- | --- |
+| `main.py` | GUI (CustomTkinter) and orchestration |
+| `core.py` | Pure logic: time parsing, format strings, resolution detection, FFmpeg path, folder classification |
+| `downloader.py` | Builds `yt-dlp` options and output templates |
+| `config_store.py` | Reads/writes user config and download history (JSON) |
+| `test_core.py`, `test_downloader.py` | Pytest suites for the pure-logic modules |
+
+## ✅ Running Tests
+
+The pure-logic modules are covered by a pytest suite (no GUI required):
+
+```bash
+pip install pytest
+pytest -v
+```
+
+Tests run automatically on every push and pull request via GitHub Actions (Python 3.10–3.13).
 
 ## 👨‍💻 Developer & Acknowledgments
 
