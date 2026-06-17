@@ -1,0 +1,15 @@
+# Cấu hình ruff cho Universal Video Downloader.
+# Bắt lỗi thật (import thừa, biến không dùng, lỗi tiềm ẩn) nhưng không
+# quá khắt khe về độ dài dòng để khỏi phải bẻ các chuỗi tiếng Việt dài.
+
+line-length = 100
+target-version = "py38"
+
+[lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # độ dài dòng - nhiều chuỗi giao diện tiếng Việt khá dài
+    "E731",  # cho phép gán lambda (dùng trong _ui và download_ranges)
+]
+
+exclude = ["build", "dist"]

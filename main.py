@@ -1,16 +1,16 @@
-import customtkinter as ctk
-import yt_dlp
-import threading
-import os
-import requests
-from PIL import Image
 import io
+import os
+import threading
 import tkinter.filedialog as filedialog
-import subprocess
-import sys
 
-import core
+import customtkinter as ctk
+import requests
+import yt_dlp
+from PIL import Image
+
 import config_store
+import core
+import downloader
 from core import get_ffmpeg_path
 
 # Thiết lập giao diện hiện đại
@@ -30,7 +30,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.title("Universal Video Downloader")
         self.geometry("1100x820")
         self.resizable(False, False)
-        
+
         # === PHẦN BÊN TRÁI (KHU VỰC TẢI VIDEO) ===
         self.main_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.main_frame.pack(side="left", fill="both", expand=True)
@@ -38,12 +38,12 @@ class YouTubeDownloaderApp(ctk.CTk):
         # --- Tiêu đề ---
         self.title_label = ctk.CTkLabel(self.main_frame, text="Tải Video Từ Mọi Nền Tảng", font=ctk.CTkFont(size=24, weight="bold"))
         self.title_label.pack(padx=20, pady=(20, 15))
-        
+
         # --- Khung nhập link ---
         self.url_var = ctk.StringVar()
         self.url_entry = ctk.CTkEntry(self.main_frame, width=550, height=45, placeholder_text="Dán link video (YouTube, TikTok, Facebook,...) vào đây...", textvariable=self.url_var, font=ctk.CTkFont(size=14), justify="center")
         self.url_entry.pack(padx=20, pady=5)
-        
+
         # Theo dõi sự thay đổi của url để tự map Info & Thumbnail (debouncing event)
         self.url_var.trace_add("write", self.on_url_validate)
         self.fetch_timer = None
@@ -51,25 +51,25 @@ class YouTubeDownloaderApp(ctk.CTk):
         # --- Khung hiển thị Thumbnail và Thông tin ---
         self.info_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.info_frame.pack(padx=20, pady=10, fill="x")
-        
+
         self.thumbnail_label = ctk.CTkLabel(self.info_frame, text="Nhập link để hiển thị video", width=384, height=216, fg_color="gray20", corner_radius=10)
         self.thumbnail_label.pack(pady=5)
-        
+
         self.video_title_label = ctk.CTkLabel(self.info_frame, text="", font=ctk.CTkFont(size=15, weight="bold"), text_color="white", wraplength=550)
         self.video_title_label.pack(pady=(5,0))
-        
+
         self.video_duration_label = ctk.CTkLabel(self.info_frame, text="", font=ctk.CTkFont(size=13), text_color="gray")
         self.video_duration_label.pack()
 
         # --- Khung Chọn Thư mục ---
         self.folder_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.folder_frame.pack(padx=20, pady=10)
-        
+
         self.save_dir = ctk.StringVar(value=self.app_config.get('save_dir', os.path.join(os.path.expanduser('~'), 'Downloads')))
-        
+
         self.dir_entry = ctk.CTkEntry(self.folder_frame, textvariable=self.save_dir, width=250, height=35, state="disabled")
         self.dir_entry.pack(side="left", padx=(0, 10))
-        
+
         self.btn_browse = ctk.CTkButton(self.folder_frame, text="Chọn Thư Mục", width=110, height=35, command=self.browse_folder, fg_color="gray30", hover_color="gray40")
         self.btn_browse.pack(side="left", padx=(0, 8))
 
@@ -86,15 +86,15 @@ class YouTubeDownloaderApp(ctk.CTk):
 
         self.format_var = ctk.StringVar(value=self.app_config.get('format_choice', "Video - Tốt nhất"))
         self.format_menu = ctk.CTkOptionMenu(
-            self.options_frame, 
-            values=["Video - Tốt nhất", "Video - 1080p", "Video - 720p", "Video - 480p", "Âm thanh (MP3)"], 
+            self.options_frame,
+            values=["Video - Tốt nhất", "Video - 1080p", "Video - 720p", "Video - 480p", "Âm thanh (MP3)"],
             variable=self.format_var,
             width=200, height=35,
             font=ctk.CTkFont(size=13),
             anchor="center"
         )
         self.format_menu.pack(side="left", padx=(0, 10))
-        
+
         self.playlist_var = ctk.BooleanVar(value=False)
         self.playlist_checkbox = ctk.CTkCheckBox(
             self.options_frame,
@@ -103,7 +103,7 @@ class YouTubeDownloaderApp(ctk.CTk):
             font=ctk.CTkFont(size=13, weight="bold")
         )
         self.playlist_checkbox.pack(side="left", padx=10)
-        
+
         self.cookie_var = ctk.StringVar(value=self.app_config.get('cookie_choice', "Không Dùng Cookie"))
         self.cookie_menu = ctk.CTkOptionMenu(
             self.options_frame,
@@ -113,11 +113,11 @@ class YouTubeDownloaderApp(ctk.CTk):
             font=ctk.CTkFont(size=12)
         )
         self.cookie_menu.pack(side="left", padx=10)
-        
+
         # Thiết lập sự kiện thay đổi
         self.playlist_var.trace_add("write", self.on_playlist_toggle)
         self.cookie_var.trace_add("write", self.on_cookie_change)
-        
+
         # --- Các tuỳ chọn nâng cao khác ---
         self.adv_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.adv_frame.pack(padx=20, pady=(0, 10))
@@ -141,42 +141,42 @@ class YouTubeDownloaderApp(ctk.CTk):
             width=55, height=28, font=ctk.CTkFont(size=12)
         )
         self.concurrency_menu.pack(side="left", padx=2)
-        
+
         self.time_label = ctk.CTkLabel(self.adv_frame, text=" |  Cắt từ:", font=ctk.CTkFont(size=12))
         self.time_label.pack(side="left", padx=(5, 2))
         self.start_var = ctk.StringVar()
         self.start_entry = ctk.CTkEntry(self.adv_frame, textvariable=self.start_var, width=55, height=28, placeholder_text="00:00")
         self.start_entry.pack(side="left", padx=2)
-        
+
         self.time_label2 = ctk.CTkLabel(self.adv_frame, text="đến:", font=ctk.CTkFont(size=12))
         self.time_label2.pack(side="left", padx=2)
         self.end_var = ctk.StringVar()
         self.end_entry = ctk.CTkEntry(self.adv_frame, textvariable=self.end_var, width=55, height=28, placeholder_text="05:30")
         self.end_entry.pack(side="left", padx=(2, 10))
-        
+
         # Theo dõi sự thay đổi menu chọn format để tính toán lại dung lượng
         self.format_var.trace_add("write", self.on_format_change)
-        
+
         # --- Nút hành động ---
         self.action_frame = ctk.CTkFrame(self.main_frame, fg_color="transparent")
         self.action_frame.pack(padx=20, pady=10)
-        
+
         self.download_btn = ctk.CTkButton(self.action_frame, text="Tải / Tải Thêm", command=self.add_to_queue, width=150, height=45, font=ctk.CTkFont(size=15, weight="bold"))
         self.download_btn.pack(side="left", padx=10)
-        
+
         self.cancel_btn = ctk.CTkButton(self.action_frame, text="Hủy tải (Xóa DS)", command=self.cancel_download, width=200, height=45, font=ctk.CTkFont(size=14, weight="bold"), fg_color="#c0392b", hover_color="#e74c3c", state="disabled")
         self.cancel_btn.pack(side="left", padx=10)
-        
+
         self.is_cancelled = False
         self.is_downloading = False
         self.download_queue = [] # Khởi tạo danh sách hàng đợi
         self.temp_files = [] # (giữ lại cho tương thích; state tải nay theo từng task)
         self.failed_tasks = [] # Các task tải lỗi để hiển thị nút "Thử lại"
-        
+
         # --- Nhãn trạng thái ---
         self.status_label = ctk.CTkLabel(self.main_frame, text="", font=ctk.CTkFont(size=13), text_color="gray")
         self.status_label.pack(padx=20, pady=(5, 0))
-        
+
         # --- Thanh tiến trình (Progress Bar) cho TỪNG video ---
         self.progress_bar = ctk.CTkProgressBar(self.main_frame, width=550, height=12)
         self.progress_bar.set(0) # Mặc định là 0
@@ -187,7 +187,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.playlist_progress_bar = ctk.CTkProgressBar(self.main_frame, width=550, height=8, progress_color="#f39c12")
         self.playlist_progress_bar.set(0)
         # Mặc định ẩn, chỉ hiện khi tải playlist
-        
+
         # --- Footer ---
         self.footer_label = ctk.CTkLabel(self.main_frame, text="Phát triển bởi: Trần Đức Trí  ", font=ctk.CTkFont(size=12, slant="italic"), text_color="gray")
         self.footer_label.pack(side="bottom", pady=15)
@@ -200,7 +200,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         # Switch thay đổi Theme (Có khung giữ vị trí cố định chống giật lệch)
         self.theme_frame = ctk.CTkFrame(self.history_frame, fg_color="transparent")
         self.theme_frame.pack(pady=(15, 0), padx=20, anchor="ne")
-        
+
         self.theme_label = ctk.CTkLabel(self.theme_frame, text="Chế độ Tối 🌙", font=ctk.CTkFont(size=12, weight="bold"), width=105, anchor="e")
         self.theme_label.pack(side="left", padx=5)
 
@@ -231,16 +231,16 @@ class YouTubeDownloaderApp(ctk.CTk):
 
         self.history_header_frame = ctk.CTkFrame(self.history_frame, fg_color="transparent")
         self.history_header_frame.pack(fill="x", padx=10, pady=(5, 5))
-        
+
         self.history_title = ctk.CTkLabel(self.history_header_frame, text="📁 LỊCH SỬ TẢI (HOÀN TẤT)", font=ctk.CTkFont(size=14, weight="bold"), text_color="#2ecc71")
         self.history_title.pack(side="left")
-        
+
         self.clear_history_btn = ctk.CTkButton(self.history_header_frame, text="🗑️ Xóa", width=40, height=22, fg_color="#c0392b", hover_color="#e74c3c", font=ctk.CTkFont(size=11), command=self.clear_history_data)
         self.clear_history_btn.pack(side="right")
 
         self.history_scroll = ctk.CTkScrollableFrame(self.history_frame, fg_color="transparent")
         self.history_scroll.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-        
+
         self.load_history_from_file()
 
         # Lưu cấu hình khi đóng cửa sổ
@@ -257,7 +257,7 @@ class YouTubeDownloaderApp(ctk.CTk):
     def _setup_drag_drop(self):
         """Bật kéo-thả văn bản/đường dẫn vào ô link. Bỏ qua nếu thiếu tkinterdnd2."""
         try:
-            from tkinterdnd2 import TkinterDnD, DND_TEXT, DND_FILES
+            from tkinterdnd2 import DND_FILES, DND_TEXT, TkinterDnD
             TkinterDnD._require(self)  # Khởi tạo tkdnd cho cửa sổ CTk hiện có
 
             def on_drop(event):
@@ -359,17 +359,17 @@ class YouTubeDownloaderApp(ctk.CTk):
     def refresh_queue_ui(self):
         for widget in self.queue_scroll.winfo_children():
             widget.destroy()
-            
+
         for i, task in enumerate(self.download_queue):
             item_frame = ctk.CTkFrame(self.queue_scroll, corner_radius=5)
             item_frame.pack(fill="x", pady=2)
-            
+
             short_url = task['url'][:30] + "..." if len(task['url']) > 30 else task['url']
             format_tag = "MP3" if task['format_choice'] == "Âm thanh (MP3)" else "MP4"
-            
+
             lbl = ctk.CTkLabel(item_frame, text=f"#{i+1}. [{format_tag}] {short_url}", font=ctk.CTkFont(size=11))
             lbl.pack(side="left", padx=10, pady=5)
-            
+
             def make_remove_func(idx):
                 def remove_task():
                     if 0 <= idx < len(self.download_queue):
@@ -377,9 +377,9 @@ class YouTubeDownloaderApp(ctk.CTk):
                         self.refresh_queue_ui()
                         self.status_label.configure(text=f"Đã hủy 1 mục khỏi hàng đợi! (Còn {len(self.download_queue)})", text_color="orange")
                 return remove_task
-                
+
             btn_remove = ctk.CTkButton(
-                item_frame, text="✕", width=22, height=22, 
+                item_frame, text="✕", width=22, height=22,
                 fg_color="transparent", hover_color="#c0392b", text_color="#e74c3c", font=ctk.CTkFont(size=12, weight="bold"),
                 command=make_remove_func(i)
             )
@@ -542,8 +542,8 @@ class YouTubeDownloaderApp(ctk.CTk):
             return
         try:
             ydl_opts = {
-                'quiet': True, 
-                'no_warnings': True, 
+                'quiet': True,
+                'no_warnings': True,
                 'noplaylist': True,
                 'format': self._get_format_string(format_choice)
             }
@@ -552,14 +552,14 @@ class YouTubeDownloaderApp(ctk.CTk):
                 ydl_opts['cookiesfrombrowser'] = cookie_opt
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-            
+
             file_size_bytes = 0
             if 'requested_formats' in info:
                 for f in info['requested_formats']:
                     file_size_bytes += f.get('filesize') or f.get('filesize_approx') or 0
             else:
                 file_size_bytes = info.get('filesize') or info.get('filesize_approx') or 0
-                
+
             text = self.video_duration_label.cget("text").split(" | ")[0]
             if file_size_bytes > 0:
                 mb_size = file_size_bytes / (1024 * 1024)
@@ -567,7 +567,7 @@ class YouTubeDownloaderApp(ctk.CTk):
             else:
                 new_text = f"{text} | Dung lượng: [Chưa rõ]"
             self._ui(lambda: self.video_duration_label.configure(text=new_text))
-        except Exception as e:
+        except Exception:
             pass # Lặng lẽ bỏ qua nếu lỗi cập nhật ngầm
 
     def on_url_validate(self, *args):
@@ -584,15 +584,15 @@ class YouTubeDownloaderApp(ctk.CTk):
             self.video_title_label.configure(text="")
             self.video_duration_label.configure(text="")
             return
-        
+
         self.video_title_label.configure(text="Đang lấy thông tin video & tính dung lượng...")
         threading.Thread(target=self._thread_fetch_info, args=(url, self.format_var.get()), daemon=True).start()
 
     def _thread_fetch_info(self, url, format_choice):
         try:
             ydl_opts = {
-                'quiet': True, 
-                'no_warnings': True, 
+                'quiet': True,
+                'no_warnings': True,
                 'noplaylist': not self.playlist_var.get(),
                 'extract_flat': 'in_playlist' if self.playlist_var.get() else False,
                 'format': self._get_format_string(format_choice)
@@ -602,23 +602,23 @@ class YouTubeDownloaderApp(ctk.CTk):
                 ydl_opts['cookiesfrombrowser'] = cookie_opt
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-            
+
             if 'entries' in info:
                 # Nếu là Playlist
                 title = "Playlist: " + info.get('title', 'Tên Playlist không xác định')
                 entries = list(info['entries'])
                 video_count = len(entries)
                 duration_str = f"Danh sách này có: {video_count} video"
-                
+
                 self.current_playlist_url = url
                 self.current_playlist_entries = entries
-                
+
                 thumbnail_url = None
                 if entries and len(entries) > 0 and isinstance(entries[0], dict):
                     thumbnail_url = entries[0].get('thumbnails', [{'url': None}])[-1].get('url') or entries[0].get('thumbnail')
                 if not thumbnail_url:
                     thumbnail_url = info.get('thumbnails', [{'url': None}])[-1].get('url')
-                    
+
                 self._ui(lambda: self.video_title_label.configure(text=title))
                 self._ui(lambda: self.video_duration_label.configure(text=duration_str))
                 # Playlist: menu chất lượng trả về mặc định (mỗi video có thể khác nhau)
@@ -629,19 +629,19 @@ class YouTubeDownloaderApp(ctk.CTk):
                 duration = info.get('duration', 0)
                 mins, secs = divmod(duration, 60)
                 duration_str = f"Thời lượng: {int(mins)} phút {int(secs)} giây"
-                
+
                 file_size_bytes = 0
                 if 'requested_formats' in info:
                     for f in info['requested_formats']:
                         file_size_bytes += f.get('filesize') or f.get('filesize_approx') or 0
                 else:
                     file_size_bytes = info.get('filesize') or info.get('filesize_approx') or 0
-                    
+
                 if file_size_bytes > 0:
                     mb_size = file_size_bytes / (1024 * 1024)
                     duration_str += f" | Dung lượng cỡ: ~{mb_size:.1f} MB"
                 else:
-                    duration_str += f" | Dung lượng: [Chưa rõ]"
+                    duration_str += " | Dung lượng: [Chưa rõ]"
 
                 thumbnail_url = info.get('thumbnail')
                 self._ui(lambda: self.video_title_label.configure(text=title))
@@ -658,9 +658,9 @@ class YouTubeDownloaderApp(ctk.CTk):
                     image = Image.open(io.BytesIO(img_data))
                     ctk_image = ctk.CTkImage(light_image=image, dark_image=image, size=(384, 216))
                     self._ui(lambda: self.thumbnail_label.configure(image=ctk_image, text=""))
-                except Exception as img_e:
+                except Exception:
                     self._ui(lambda: self.thumbnail_label.configure(image=None, text="Lỗi khi tải ảnh thu nhỏ"))
-        except Exception as e:
+        except Exception:
             self._ui(lambda: self.video_title_label.configure(text="Không thể lấy thông tin video (Hoặc link bị lỗi)"))
             self._ui(lambda: self.video_duration_label.configure(text=""))
             self._ui(lambda: self.thumbnail_label.configure(image=None, text="Lỗi"))
@@ -762,10 +762,10 @@ class YouTubeDownloaderApp(ctk.CTk):
         import os
         item_frame = ctk.CTkFrame(self.history_scroll, corner_radius=5)
         item_frame.pack(fill="x", pady=2)
-        
+
         lbl = ctk.CTkLabel(item_frame, text="✅ " + (title[:26] + "..." if len(title) > 26 else title), font=ctk.CTkFont(size=11))
         lbl.pack(side="left", padx=5, pady=5)
-        
+
         def open_folder():
             try:
                 os.startfile(download_folder)
@@ -789,7 +789,7 @@ class YouTubeDownloaderApp(ctk.CTk):
 
     def add_history_item(self, title, download_folder, filepath=None):
         self.save_history_to_file(title, download_folder, filepath)
-        
+
         for widget in self.history_scroll.winfo_children():
             widget.destroy()
         self.load_history_from_file()
@@ -830,7 +830,7 @@ class YouTubeDownloaderApp(ctk.CTk):
             'end_sec': end_sec,
             'smart_folder': self.smart_folder_var.get()
         }
-        
+
         if task['is_playlist'] and getattr(self, 'current_playlist_url', '') == url and getattr(self, 'current_playlist_entries', None):
             self._show_playlist_selector(task)
         else:
@@ -851,7 +851,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         checkboxes = []
         entries = self.current_playlist_entries
         for i, entry in enumerate(entries):
-            var = ctk.BooleanVar(value=True) 
+            var = ctk.BooleanVar(value=True)
             title = entry.get('title') or entry.get('url', f"Video {i+1}")
             cb = ctk.CTkCheckBox(scroll, text=f"{i+1}. {title}", variable=var, font=ctk.CTkFont(size=12))
             cb.pack(fill="x", pady=5)
@@ -870,7 +870,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         def confirm():
             selected = [str(idx) for idx, var in checkboxes if var.get()]
             if not selected:
-                return 
+                return
             task['playlist_items'] = ",".join(selected)
             popup.destroy()
             self._enqueue_task(task)
@@ -879,11 +879,11 @@ class YouTubeDownloaderApp(ctk.CTk):
 
     def _enqueue_task(self, task):
         self.download_queue.append(task)
-        self.url_var.set("") 
-        
+        self.url_var.set("")
+
         self.status_label.configure(text=f"Đã đưa vào hàng đợi. (+{len(self.download_queue)} mục)", text_color="orange")
-        self.refresh_queue_ui() 
-        
+        self.refresh_queue_ui()
+
         if not self.is_downloading:
             threading.Thread(target=self._process_queue_thread, daemon=True).start()
 
@@ -954,7 +954,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         # Check if queue has items added while cancelling
         if len(self.download_queue) > 0 and not self.is_cancelled:
             threading.Thread(target=self._process_queue_thread, daemon=True).start()
-    
+
     def _execute_download(self, task):
         url = task['url']
         download_folder = task['download_folder']
@@ -966,7 +966,7 @@ class YouTubeDownloaderApp(ctk.CTk):
             self._show_playlist_progress(True)
         else:
             self._show_playlist_progress(False)
-        
+
         if task.get('smart_folder', False):
             sub_fs = core.classify_folder(url)
             download_folder = os.path.join(download_folder, sub_fs)
@@ -1003,10 +1003,10 @@ class YouTubeDownloaderApp(ctk.CTk):
             )
 
             state['temp_files'] = []
-    
+
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=True) 
+                    info = ydl.extract_info(url, download=True)
                     if is_playlist:
                         downloaded_title = "Playlist/Kênh: " + info.get('title', 'Nhiều video')
                         history_folder = os.path.join(download_folder, info.get('title', ''))
@@ -1016,14 +1016,14 @@ class YouTubeDownloaderApp(ctk.CTk):
                         history_folder = download_folder
                         # Lấy đường dẫn file cuối cùng để có thể mở trực tiếp
                         final_filepath = self._resolve_final_filepath(info, download_folder)
-                    
+
                 if not self.is_cancelled:
                     if retry_without_subtitles:
                         downloaded_title = downloaded_title + " (Không Phụ Đề)"
-                        
+
                     self.after(0, self.add_history_item, downloaded_title, history_folder, final_filepath)
                     return True
-    
+
             except Exception as e:
                 err_str = str(e)
                 if "CANCELLED_BY_USER" in err_str:
@@ -1035,7 +1035,7 @@ class YouTubeDownloaderApp(ctk.CTk):
                                 cleaned = True
                         except Exception:
                             pass
-                    
+
                     if not is_playlist:
                         try:
                             # 1. Clean expected final files from output template
@@ -1047,7 +1047,7 @@ class YouTubeDownloaderApp(ctk.CTk):
                                         if f.endswith('.ytdl') or f.endswith('.part'):
                                             os.remove(os.path.join(dir_path, f))
                                             cleaned = True
-                                            
+
                             # 2. Clean thumbnails and media starting with exact base_name from yt-dlp info_dict
                             if state.get('current_filename'):
                                 base_name = os.path.splitext(state['current_filename'])[0]
@@ -1059,20 +1059,20 @@ class YouTubeDownloaderApp(ctk.CTk):
                                         cleaned = True
                         except Exception:
                             pass
-    
+
                     if cleaned:
                         self._set_status("Đã hủy & tự động dọn rác!", "orange")
                     else:
                         self._set_status("Đã hủy tải.", "orange")
                     return False
-                    
+
                 elif task['subtitle_opt'] and ("subtitles" in err_str.lower() or "429" in err_str):
                     # Tự động Retry nhưng tắt phụ đề
                     task['subtitle_opt'] = False
                     retry_without_subtitles = True
                     self._set_status("Mạng hạn chế tải Phụ Đề (Lỗi 429). Đang tải lại video KHÔNG Phụ Đề...", "orange")
                     continue # Quay lại vòng lặp while True để tải lại
-                    
+
                 else:
                     import re
                     clean_msg = re.sub(r'\x1b\[[0-9;]*m', '', err_str)

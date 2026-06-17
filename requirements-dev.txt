@@ -1,0 +1,9 @@
+# Phụ thuộc cho phát triển & kiểm thử
+-r requirements.txt
+
+pytest>=7.0
+ruff>=0.1
+
+# Tính năng tùy chọn (để thử nghiệm đầy đủ khi phát triển)
+plyer>=2.1.0
+tkinterdnd2>=0.4.0

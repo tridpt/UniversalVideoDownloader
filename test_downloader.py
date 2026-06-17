@@ -5,9 +5,8 @@ Chạy: pytest -v
 
 import os
 
-import downloader
 import config_store
-
+import downloader
 
 # ---------------------- build_out_template ----------------------
 

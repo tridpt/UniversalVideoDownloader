@@ -3,3 +3,7 @@ yt-dlp>=2026.03.17
 Pillow>=10.0.0
 requests>=2.31.0
 static-ffmpeg>=2.5
+
+# --- Tùy chọn (app vẫn chạy nếu thiếu) ---
+# plyer>=2.1.0       # thông báo hệ thống khi tải xong
+# tkinterdnd2>=0.4.0 # kéo-thả link/file vào cửa sổ

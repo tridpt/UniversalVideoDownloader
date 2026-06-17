@@ -7,7 +7,6 @@ import pytest
 
 import core
 
-
 # ---------------------- parse_time ----------------------
 
 class TestParseTime:
