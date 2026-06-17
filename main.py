@@ -9,26 +9,8 @@ import tkinter.filedialog as filedialog
 import subprocess
 import sys
 
-def get_ffmpeg_path():
-    # Khi đã đóng gói (PyInstaller): dùng ffmpeg nhúng kèm
-    if getattr(sys, 'frozen', False):
-        return os.path.join(sys._MEIPASS, 'ffmpeg_bin')
-
-    # 1. Thử lấy ffmpeg từ package static_ffmpeg (khả chuyển, không phụ thuộc máy)
-    try:
-        import static_ffmpeg
-        pkg_dir = os.path.dirname(static_ffmpeg.__file__)
-        for sub in ('bin/win32', 'bin/linux', 'bin/darwin', 'bin'):
-            candidate = os.path.join(pkg_dir, *sub.split('/'))
-            if os.path.isdir(candidate):
-                exe = 'ffmpeg.exe' if os.name == 'nt' else 'ffmpeg'
-                if os.path.exists(os.path.join(candidate, exe)):
-                    return candidate
-    except Exception:
-        pass
-
-    # 2. Nếu không có, để None -> yt-dlp tự tìm ffmpeg trong PATH của hệ thống
-    return None
+import core
+from core import get_ffmpeg_path
 
 # Thiết lập giao diện hiện đại
 ctk.set_appearance_mode("Dark")
@@ -469,20 +451,10 @@ class YouTubeDownloaderApp(ctk.CTk):
             widget.destroy()
 
     def _get_format_string(self, format_choice):
-        # Trả về mã format chuẩn của yt-dlp tương ứng với lựa chọn
-        if format_choice == "Âm thanh (MP3)":
-            return 'bestaudio/best'
-        # Bắt mọi nhãn dạng "Video - <số>p" (1080p, 1440p, 2160p, ...) một cách tổng quát
-        import re
-        m = re.search(r'(\d+)p', format_choice)
-        if m:
-            h = m.group(1)
-            return f'bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]/best[height<={h}][ext=mp4]/best'
-        # Video - Tốt nhất (hoặc không xác định)
-        return 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        return core.get_format_string(format_choice)
 
     def _default_format_values(self):
-        return ["Video - Tốt nhất", "Video - 1080p", "Video - 720p", "Video - 480p", "Âm thanh (MP3)"]
+        return list(core.DEFAULT_FORMAT_VALUES)
 
     def _apply_format_values(self, values):
         """Cập nhật danh sách lựa chọn của menu chất lượng, giữ lựa chọn hiện tại nếu vẫn còn."""
@@ -494,21 +466,7 @@ class YouTubeDownloaderApp(ctk.CTk):
     def _update_format_menu(self, info):
         """Dựng lại danh sách chất lượng dựa trên độ phân giải thật sự có của video."""
         try:
-            heights = set()
-            for f in info.get('formats', []):
-                # Chỉ lấy format có hình ảnh (vcodec khác 'none')
-                if f.get('vcodec') and f.get('vcodec') != 'none':
-                    h = f.get('height')
-                    if h:
-                        heights.add(int(h))
-
-            if not heights:
-                # Không đọc được -> trả menu về mặc định
-                self._ui(lambda: self._apply_format_values(self._default_format_values()))
-                return
-
-            sorted_h = sorted(heights, reverse=True)
-            values = ["Video - Tốt nhất"] + [f"Video - {h}p" for h in sorted_h] + ["Âm thanh (MP3)"]
+            values = core.format_values_from_info(info)
             self._ui(lambda: self._apply_format_values(values))
         except Exception:
             pass
@@ -776,27 +734,7 @@ class YouTubeDownloaderApp(ctk.CTk):
     def _parse_time(self, t_str):
         """Chuyển chuỗi thời gian (HH:MM:SS / MM:SS / SS) thành giây.
         Trả về (seconds | None, error_message | None)."""
-        t_str = (t_str or "").strip()
-        if not t_str:
-            return None, None  # Bỏ trống là hợp lệ (không cắt)
-
-        parts = t_str.split(':')
-        if len(parts) > 3:
-            return None, f"Thời gian '{t_str}' sai định dạng (dùng HH:MM:SS, MM:SS hoặc SS)"
-
-        sec = 0.0
-        for i, part in enumerate(reversed(parts)):
-            part = part.strip()
-            if part == "":
-                return None, f"Thời gian '{t_str}' sai định dạng (có ô trống)"
-            try:
-                value = float(part)
-            except ValueError:
-                return None, f"Thời gian '{t_str}' chứa ký tự không hợp lệ"
-            if value < 0:
-                return None, f"Thời gian '{t_str}' không được âm"
-            sec += value * (60 ** i)
-        return sec, None
+        return core.parse_time(t_str)
 
     def add_to_queue(self):
         url = self.url_var.get().strip()
@@ -942,19 +880,7 @@ class YouTubeDownloaderApp(ctk.CTk):
             self._show_playlist_progress(False)
         
         if task.get('smart_folder', False):
-            domain_map = {
-                'youtube.com': 'YouTube', 'youtu.be': 'YouTube',
-                'tiktok.com': 'TikTok',
-                'facebook.com': 'Facebook', 'fb.watch': 'Facebook',
-                'instagram.com': 'Instagram',
-                'twitter.com': 'Twitter_X', 'x.com': 'Twitter_X',
-                'soundcloud.com': 'SoundCloud'
-            }
-            sub_fs = 'Others'
-            for dom, name in domain_map.items():
-                if dom in url.lower():
-                    sub_fs = name
-                    break
+            sub_fs = core.classify_folder(url)
             download_folder = os.path.join(download_folder, sub_fs)
             if not os.path.exists(download_folder):
                 try:
