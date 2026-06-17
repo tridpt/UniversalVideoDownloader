@@ -10,6 +10,7 @@ import subprocess
 import sys
 
 import core
+import config_store
 from core import get_ffmpeg_path
 
 # Thiết lập giao diện hiện đại
@@ -21,8 +22,7 @@ class YouTubeDownloaderApp(ctk.CTk):
         super().__init__()
 
         # Nạp cấu hình đã lưu từ lần dùng trước (thư mục tải, định dạng, tùy chọn...)
-        self.config_file = os.path.join(os.path.expanduser('~'), '.univideo_config.json')
-        self.app_config = self._load_config()
+        self.app_config = config_store.load_config()
 
         self.title("Universal Video Downloader")
         self.geometry("1100x820")
@@ -230,7 +230,6 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.history_scroll = ctk.CTkScrollableFrame(self.history_frame, fg_color="transparent")
         self.history_scroll.pack(fill="both", expand=True, padx=10, pady=(0, 10))
         
-        self.history_file = os.path.join(os.path.expanduser('~'), '.univideo_history.json')
         self.load_history_from_file()
 
         # Lưu cấu hình khi đóng cửa sổ
@@ -242,31 +241,19 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.bind("<FocusIn>", lambda e: self._check_clipboard_for_link())
 
     def _load_config(self):
-        import json
-        try:
-            if os.path.exists(self.config_file):
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-        except Exception:
-            pass
-        return {}
+        return config_store.load_config()
 
     def _save_config(self):
-        import json
-        try:
-            data = {
-                'save_dir': self.save_dir.get(),
-                'format_choice': self.format_var.get(),
-                'smart_folder': self.smart_folder_var.get(),
-                'thumbnail_opt': self.thumbnail_var.get(),
-                'subtitle_opt': self.subtitle_var.get(),
-                'cookie_choice': self.cookie_var.get(),
-                'appearance_mode': 'Dark' if self.appearance_mode_switch.get() == 1 else 'Light',
-            }
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=4)
-        except Exception:
-            pass
+        data = {
+            'save_dir': self.save_dir.get(),
+            'format_choice': self.format_var.get(),
+            'smart_folder': self.smart_folder_var.get(),
+            'thumbnail_opt': self.thumbnail_var.get(),
+            'subtitle_opt': self.subtitle_var.get(),
+            'cookie_choice': self.cookie_var.get(),
+            'appearance_mode': 'Dark' if self.appearance_mode_switch.get() == 1 else 'Light',
+        }
+        config_store.save_config(data)
 
     def _on_close(self):
         self._save_config()
@@ -411,42 +398,14 @@ class YouTubeDownloaderApp(ctk.CTk):
         self._enqueue_task(item['task'])
 
     def load_history_from_file(self):
-        import json
-        if os.path.exists(self.history_file):
-            try:
-                with open(self.history_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    for item in data:
-                        self._render_history_item(item.get('title', ''), item.get('path', ''))
-            except Exception:
-                pass
+        for item in config_store.load_history():
+            self._render_history_item(item.get('title', ''), item.get('path', ''))
 
     def save_history_to_file(self, title, path):
-        import json
-        data = []
-        if os.path.exists(self.history_file):
-            try:
-                with open(self.history_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-            except Exception:
-                pass
-        
-        data.insert(0, {'title': title, 'path': path}) 
-        if len(data) > 100:
-            data = data[:100]
-            
-        try:
-            with open(self.history_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=4)
-        except Exception:
-            pass
+        config_store.add_history(title, path)
 
     def clear_history_data(self):
-        if os.path.exists(self.history_file):
-            try:
-                os.remove(self.history_file)
-            except Exception:
-                pass
+        config_store.clear_history()
         for widget in self.history_scroll.winfo_children():
             widget.destroy()
 
@@ -888,68 +847,30 @@ class YouTubeDownloaderApp(ctk.CTk):
                 except Exception:
                     pass
 
-        if is_playlist:
-            out_template = os.path.join(download_folder, '%(playlist_title)s', '%(playlist_index)s - %(title)s.%(ext)s')
-        else:
-            out_template = os.path.join(download_folder, '%(title)s.%(ext)s')
-            
+        out_template = downloader.build_out_template(download_folder, is_playlist)
+
         retry_without_subtitles = False
         
         while True:
-            format_choice = task['format_choice']
             ffmpeg_dir = get_ffmpeg_path()
-            
-            ydl_opts = {
-                'outtmpl': out_template,
-                'progress_hooks': [self.my_hook],
-                'noplaylist': not is_playlist, 
-                'quiet': True,
-                'no_warnings': True,
-                'format': self._get_format_string(format_choice)
-            }
-            # Chỉ set khi tìm thấy ffmpeg; nếu None để yt-dlp tự dò trong PATH
-            if ffmpeg_dir:
-                ydl_opts['ffmpeg_location'] = ffmpeg_dir
-            
-            if 'playlist_items' in task:
-                ydl_opts['playlist_items'] = task['playlist_items']
-            
-            if task['cookie_opt']:
-                ydl_opts['cookiesfrombrowser'] = task['cookie_opt']
-                
-            if task['subtitle_opt']:
-                ydl_opts['writesubtitles'] = True
-                ydl_opts['writeautomaticsub'] = True
-                ydl_opts['subtitleslangs'] = ['vi', 'en'] 
-    
-            if format_choice == "Âm thanh (MP3)":
-                ydl_opts['postprocessors'] = [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'mp3',
-                    'preferredquality': '192',
-                }]
-            else:
-                ydl_opts['merge_output_format'] = 'mp4'
-                
-            if task['thumbnail_opt']:
-                ydl_opts['writethumbnail'] = True
-                if 'postprocessors' not in ydl_opts:
-                    ydl_opts['postprocessors'] = []
-                ydl_opts['postprocessors'].append({
-                    'key': 'EmbedThumbnail',
-                    'already_have_thumbnail': False,
-                })
-    
+
             s_val = task['start_sec']
             e_val = task['end_sec']
+            download_ranges = None
             if s_val is not None or e_val is not None:
                 def my_download_range_func(info_dict, ydl):
                     start = s_val if s_val is not None else 0
                     end = e_val if e_val is not None else float('inf')
                     return [(start, end)]
-                ydl_opts['download_ranges'] = my_download_range_func
-                ydl_opts['force_keyframes_at_cuts'] = True
-    
+                download_ranges = my_download_range_func
+
+            ydl_opts = downloader.build_ydl_opts(
+                task, out_template,
+                ffmpeg_dir=ffmpeg_dir,
+                progress_hook=self.my_hook,
+                download_ranges=download_ranges,
+            )
+
             self.temp_files = [] 
     
             try:
