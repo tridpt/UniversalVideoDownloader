@@ -178,15 +178,22 @@ class YouTubeDownloaderApp(ctk.CTk):
         self.is_downloading = False
         self.download_queue = [] # Khởi tạo danh sách hàng đợi
         self.temp_files = [] # Lấy danh sách file rác tải dở
+        self.failed_tasks = [] # Các task tải lỗi để hiển thị nút "Thử lại"
         
         # --- Nhãn trạng thái ---
         self.status_label = ctk.CTkLabel(self.main_frame, text="", font=ctk.CTkFont(size=13), text_color="gray")
         self.status_label.pack(padx=20, pady=(5, 0))
         
-        # --- Thanh tiến trình (Progress Bar) ---
+        # --- Thanh tiến trình (Progress Bar) cho TỪNG video ---
         self.progress_bar = ctk.CTkProgressBar(self.main_frame, width=550, height=12)
         self.progress_bar.set(0) # Mặc định là 0
-        self.progress_bar.pack(padx=20, pady=10)
+        self.progress_bar.pack(padx=20, pady=(10, 4))
+
+        # --- Thanh tiến trình TỔNG cho playlist (số video đã xong / tổng) ---
+        self.playlist_progress_label = ctk.CTkLabel(self.main_frame, text="", font=ctk.CTkFont(size=11), text_color="gray")
+        self.playlist_progress_bar = ctk.CTkProgressBar(self.main_frame, width=550, height=8, progress_color="#f39c12")
+        self.playlist_progress_bar.set(0)
+        # Mặc định ẩn, chỉ hiện khi tải playlist
         
         # --- Footer ---
         self.footer_label = ctk.CTkLabel(self.main_frame, text="Phát triển bởi: Trần Đức Trí  ", font=ctk.CTkFont(size=12, slant="italic"), text_color="gray")
@@ -223,6 +230,11 @@ class YouTubeDownloaderApp(ctk.CTk):
 
         self.queue_scroll = ctk.CTkScrollableFrame(self.history_frame, fg_color=("gray85", "gray25"), height=110)
         self.queue_scroll.pack(fill="x", padx=10, pady=(0, 10))
+
+        # --- Khu vực MỤC TẢI LỖI (có nút Thử lại) ---
+        self.failed_title = ctk.CTkLabel(self.history_frame, text="⚠️ TẢI LỖI (BẤM ĐỂ THỬ LẠI)", font=ctk.CTkFont(size=14, weight="bold"), text_color="#e74c3c")
+        self.failed_scroll = ctk.CTkScrollableFrame(self.history_frame, fg_color=("gray85", "gray25"), height=90)
+        # Mặc định ẩn, chỉ hiện khi có mục lỗi
 
         self.history_header_frame = ctk.CTkFrame(self.history_frame, fg_color="transparent")
         self.history_header_frame.pack(fill="x", padx=10, pady=(5, 5))
@@ -296,6 +308,27 @@ class YouTubeDownloaderApp(ctk.CTk):
         """Cập nhật thanh tiến trình an toàn từ thread phụ."""
         self._ui(lambda: self.progress_bar.set(value))
 
+    def _show_playlist_progress(self, show):
+        """Hiện/ẩn thanh tiến trình tổng của playlist."""
+        def _do():
+            if show:
+                self.playlist_progress_label.pack(padx=20, pady=(2, 0))
+                self.playlist_progress_bar.pack(padx=20, pady=(0, 8))
+            else:
+                self.playlist_progress_label.pack_forget()
+                self.playlist_progress_bar.pack_forget()
+        self._ui(_do)
+
+    def _set_playlist_progress(self, idx, count):
+        """Cập nhật thanh tổng playlist: video idx/count."""
+        def _do():
+            try:
+                self.playlist_progress_bar.set(idx / count if count else 0)
+                self.playlist_progress_label.configure(text=f"Tiến độ Playlist: {idx}/{count} video")
+            except Exception:
+                pass
+        self._ui(_do)
+
     def change_appearance_mode_event(self):
         if self.appearance_mode_switch.get() == 1:
             ctk.set_appearance_mode("Dark")
@@ -332,6 +365,68 @@ class YouTubeDownloaderApp(ctk.CTk):
                 command=make_remove_func(i)
             )
             btn_remove.pack(side="right", padx=5)
+
+    def _add_failed_task(self, task, reason=""):
+        """Ghi nhận 1 task tải lỗi để người dùng có thể bấm Thử lại."""
+        self.failed_tasks.append({'task': task, 'reason': reason})
+        self._ui(self._refresh_failed_ui)
+
+    def _refresh_failed_ui(self):
+        for widget in self.failed_scroll.winfo_children():
+            widget.destroy()
+
+        if not self.failed_tasks:
+            # Ẩn cả khu vực khi không có lỗi
+            self.failed_title.pack_forget()
+            self.failed_scroll.pack_forget()
+            return
+
+        # Hiện khu vực (đặt ngay trên phần lịch sử)
+        self.failed_title.pack(pady=(5, 5), before=self.history_header_frame)
+        self.failed_scroll.pack(fill="x", padx=10, pady=(0, 10), before=self.history_header_frame)
+
+        for i, item in enumerate(self.failed_tasks):
+            task = item['task']
+            item_frame = ctk.CTkFrame(self.failed_scroll, corner_radius=5)
+            item_frame.pack(fill="x", pady=2)
+
+            short_url = task['url'][:26] + "..." if len(task['url']) > 26 else task['url']
+            lbl = ctk.CTkLabel(item_frame, text=f"⚠️ {short_url}", font=ctk.CTkFont(size=11), text_color="#e74c3c")
+            lbl.pack(side="left", padx=8, pady=5)
+
+            def make_retry_func(idx):
+                def retry():
+                    self._retry_task(idx)
+                return retry
+
+            def make_remove_func(idx):
+                def remove():
+                    if 0 <= idx < len(self.failed_tasks):
+                        del self.failed_tasks[idx]
+                        self._refresh_failed_ui()
+                return remove
+
+            btn_remove = ctk.CTkButton(
+                item_frame, text="✕", width=22, height=22,
+                fg_color="transparent", hover_color="#c0392b", text_color="#e74c3c",
+                font=ctk.CTkFont(size=12, weight="bold"), command=make_remove_func(i)
+            )
+            btn_remove.pack(side="right", padx=(2, 5))
+
+            btn_retry = ctk.CTkButton(
+                item_frame, text="🔄 Thử lại", width=70, height=22,
+                fg_color="#e67e22", hover_color="#f39c12", font=ctk.CTkFont(size=11),
+                command=make_retry_func(i)
+            )
+            btn_retry.pack(side="right", padx=2)
+
+    def _retry_task(self, idx):
+        """Đưa 1 task lỗi trở lại hàng đợi tải."""
+        if not (0 <= idx < len(self.failed_tasks)):
+            return
+        item = self.failed_tasks.pop(idx)
+        self._refresh_failed_ui()
+        self._enqueue_task(item['task'])
 
     def load_history_from_file(self):
         import json
@@ -377,14 +472,46 @@ class YouTubeDownloaderApp(ctk.CTk):
         # Trả về mã format chuẩn của yt-dlp tương ứng với lựa chọn
         if format_choice == "Âm thanh (MP3)":
             return 'bestaudio/best'
-        elif format_choice == "Video - 1080p":
-            return 'bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best'
-        elif format_choice == "Video - 720p":
-            return 'bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best'
-        elif format_choice == "Video - 480p":
-            return 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best'
-        else: # Video - Tốt nhất
-            return 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        # Bắt mọi nhãn dạng "Video - <số>p" (1080p, 1440p, 2160p, ...) một cách tổng quát
+        import re
+        m = re.search(r'(\d+)p', format_choice)
+        if m:
+            h = m.group(1)
+            return f'bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]/best[height<={h}][ext=mp4]/best'
+        # Video - Tốt nhất (hoặc không xác định)
+        return 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+
+    def _default_format_values(self):
+        return ["Video - Tốt nhất", "Video - 1080p", "Video - 720p", "Video - 480p", "Âm thanh (MP3)"]
+
+    def _apply_format_values(self, values):
+        """Cập nhật danh sách lựa chọn của menu chất lượng, giữ lựa chọn hiện tại nếu vẫn còn."""
+        current = self.format_var.get()
+        self.format_menu.configure(values=values)
+        if current not in values:
+            self.format_var.set(values[0])
+
+    def _update_format_menu(self, info):
+        """Dựng lại danh sách chất lượng dựa trên độ phân giải thật sự có của video."""
+        try:
+            heights = set()
+            for f in info.get('formats', []):
+                # Chỉ lấy format có hình ảnh (vcodec khác 'none')
+                if f.get('vcodec') and f.get('vcodec') != 'none':
+                    h = f.get('height')
+                    if h:
+                        heights.add(int(h))
+
+            if not heights:
+                # Không đọc được -> trả menu về mặc định
+                self._ui(lambda: self._apply_format_values(self._default_format_values()))
+                return
+
+            sorted_h = sorted(heights, reverse=True)
+            values = ["Video - Tốt nhất"] + [f"Video - {h}p" for h in sorted_h] + ["Âm thanh (MP3)"]
+            self._ui(lambda: self._apply_format_values(values))
+        except Exception:
+            pass
 
     def browse_folder(self):
         folder = filedialog.askdirectory(initialdir=self.save_dir.get())
@@ -527,6 +654,8 @@ class YouTubeDownloaderApp(ctk.CTk):
                     
                 self._ui(lambda: self.video_title_label.configure(text=title))
                 self._ui(lambda: self.video_duration_label.configure(text=duration_str))
+                # Playlist: menu chất lượng trả về mặc định (mỗi video có thể khác nhau)
+                self._ui(lambda: self._apply_format_values(self._default_format_values()))
             else:
                 # Nếu là 1 Video đơn
                 title = info.get('title', 'Tên video không xác định')
@@ -550,6 +679,9 @@ class YouTubeDownloaderApp(ctk.CTk):
                 thumbnail_url = info.get('thumbnail')
                 self._ui(lambda: self.video_title_label.configure(text=title))
                 self._ui(lambda: self.video_duration_label.configure(text=duration_str))
+
+                # Cập nhật menu chất lượng theo độ phân giải THẬT của video
+                self._update_format_menu(info)
 
             # Lấy hình ảnh trên mạng về và Render
             if thumbnail_url:
@@ -591,6 +723,9 @@ class YouTubeDownloaderApp(ctk.CTk):
             playlist_count = d.get('info_dict', {}).get('playlist_count')
             prefix = f"[Video {playlist_idx}/{playlist_count}] " if playlist_idx and playlist_count else ""
 
+            if playlist_idx and playlist_count:
+                self._set_playlist_progress(playlist_idx, playlist_count)
+
             try:
                 clean_str = p_str.replace('%', '')
                 percent_float = float(clean_str) / 100.0
@@ -605,6 +740,8 @@ class YouTubeDownloaderApp(ctk.CTk):
         elif d['status'] == 'finished':
             playlist_idx = d.get('info_dict', {}).get('playlist_index')
             playlist_count = d.get('info_dict', {}).get('playlist_count')
+            if playlist_idx and playlist_count:
+                self._set_playlist_progress(playlist_idx, playlist_count)
             if playlist_idx and playlist_count and playlist_idx < playlist_count:
                 self._set_status(f"[Video {playlist_idx}/{playlist_count}] Tải xong! Đang chuyển sang video tiếp theo...")
             else:
@@ -777,6 +914,7 @@ class YouTubeDownloaderApp(ctk.CTk):
                 
         self.is_downloading = False
         self._ui(lambda: self.cancel_btn.configure(state="disabled"))
+        self._show_playlist_progress(False)  # Ẩn thanh tổng playlist khi xong hàng đợi
         
         if self.is_cancelled:
             pass # Keep the cancel message
@@ -795,6 +933,13 @@ class YouTubeDownloaderApp(ctk.CTk):
         url = task['url']
         download_folder = task['download_folder']
         is_playlist = task['is_playlist']
+
+        # Hiện thanh tiến trình tổng nếu là playlist, ẩn nếu video đơn
+        if is_playlist:
+            self._set_playlist_progress(0, 1)
+            self._show_playlist_progress(True)
+        else:
+            self._show_playlist_progress(False)
         
         if task.get('smart_folder', False):
             domain_map = {
@@ -951,6 +1096,8 @@ class YouTubeDownloaderApp(ctk.CTk):
                     import re
                     clean_msg = re.sub(r'\x1b\[[0-9;]*m', '', err_str)
                     self._set_status(f"Lỗi tải link {url[:15]}...: {clean_msg[:100]}", "red")
+                    # Ghi nhận task lỗi để người dùng có thể bấm "Thử lại"
+                    self._add_failed_task(task, clean_msg[:100])
                     return False
             return False
 
