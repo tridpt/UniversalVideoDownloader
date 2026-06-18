@@ -6,7 +6,7 @@
 
 A powerful, modern, and cross-platform video and audio downloader built with Python and CustomTkinter. It leverages the robust `yt-dlp` library to provide seamless downloading capabilities from almost any platform, including YouTube, Facebook, TikTok, Instagram, Twitter (X), and SoundCloud.
 
-![Universal Video Downloader UI](#) *(Add your screenshot here)*
+![Universal Video Downloader UI](docs/screenshot.png)
 
 ## 🌟 Features
 
@@ -61,6 +61,12 @@ Ensure you have **Python 3.8+** installed on your system.
 2. **Choose Format**: Select your desired quality or select 'Audio (MP3)'.
 3. **Save Directory**: Choose where you want to save the files. Checking 'Smart Folder' will auto-create subfolders based on the website.
 4. **Download**: Hit "Tải / Tải Thêm" to queue the video. You can queue multiple links simultaneously. 
+
+## 📸 Screenshots
+
+| Main window | Downloading queue | Light theme |
+| --- | --- | --- |
+| ![Main](docs/screenshot.png) | ![Queue](docs/screenshot-queue.png) | ![Light](docs/screenshot-light.png) |
 
 ## 🗂️ Project Structure
 
