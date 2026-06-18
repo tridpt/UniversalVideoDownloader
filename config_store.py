@@ -3,8 +3,11 @@
 Tách riêng để dễ kiểm thử và để main.py chỉ còn phần giao diện.
 """
 
+from __future__ import annotations
+
 import json
 import os
+from typing import Optional
 
 # Đường dẫn mặc định trong thư mục home của người dùng
 CONFIG_FILE = os.path.join(os.path.expanduser('~'), '.univideo_config.json')
@@ -13,7 +16,7 @@ HISTORY_FILE = os.path.join(os.path.expanduser('~'), '.univideo_history.json')
 MAX_HISTORY = 100
 
 
-def load_config(path=CONFIG_FILE):
+def load_config(path: str = CONFIG_FILE) -> dict:
     """Nạp cấu hình đã lưu; trả về dict rỗng nếu chưa có hoặc lỗi."""
     try:
         if os.path.exists(path):
@@ -24,7 +27,7 @@ def load_config(path=CONFIG_FILE):
     return {}
 
 
-def save_config(data, path=CONFIG_FILE):
+def save_config(data: dict, path: str = CONFIG_FILE) -> bool:
     """Lưu dict cấu hình ra file JSON. Trả về True nếu thành công."""
     try:
         with open(path, 'w', encoding='utf-8') as f:
@@ -34,7 +37,7 @@ def save_config(data, path=CONFIG_FILE):
         return False
 
 
-def load_history(path=HISTORY_FILE):
+def load_history(path: str = HISTORY_FILE) -> list:
     """Nạp danh sách lịch sử tải; trả về list (rỗng nếu chưa có hoặc lỗi)."""
     try:
         if os.path.exists(path):
@@ -47,7 +50,8 @@ def load_history(path=HISTORY_FILE):
     return []
 
 
-def add_history(title, folder, filepath=None, path=HISTORY_FILE, max_items=MAX_HISTORY):
+def add_history(title: str, folder: str, filepath: Optional[str] = None,
+                path: str = HISTORY_FILE, max_items: int = MAX_HISTORY) -> list:
     """Thêm 1 mục vào đầu lịch sử, giới hạn max_items. Trả về list sau khi cập nhật.
 
     filepath (tùy chọn): đường dẫn file thật để có thể mở trực tiếp.
@@ -67,7 +71,7 @@ def add_history(title, folder, filepath=None, path=HISTORY_FILE, max_items=MAX_H
     return data
 
 
-def clear_history(path=HISTORY_FILE):
+def clear_history(path: str = HISTORY_FILE) -> bool:
     """Xóa file lịch sử nếu có. Trả về True nếu đã xóa (hoặc không có gì để xóa)."""
     try:
         if os.path.exists(path):

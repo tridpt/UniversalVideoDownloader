@@ -11,6 +11,7 @@ from PIL import Image
 import config_store
 import core
 import downloader
+import queue_logic
 from core import get_ffmpeg_path
 
 # Thiết lập giao diện hiện đại
@@ -889,11 +890,7 @@ class YouTubeDownloaderApp(ctk.CTk):
 
     def _get_concurrency(self):
         """Đọc số luồng song song mong muốn (1-4), mặc định 1 nếu lỗi."""
-        try:
-            n = int(self.concurrency_var.get())
-            return max(1, min(4, n))
-        except Exception:
-            return 1
+        return queue_logic.clamp_concurrency(self.concurrency_var.get())
 
     def _process_queue_thread(self):
         self.is_downloading = True
@@ -936,7 +933,6 @@ class YouTubeDownloaderApp(ctk.CTk):
                     if not all(results):
                         has_errors = True
             self._concurrent_active = 1
-
         self.is_downloading = False
         self._ui(lambda: self.cancel_btn.configure(state="disabled"))
         self._show_playlist_progress(False)  # Ẩn thanh tổng playlist khi xong hàng đợi
@@ -1026,7 +1022,7 @@ class YouTubeDownloaderApp(ctk.CTk):
 
             except Exception as e:
                 err_str = str(e)
-                if "CANCELLED_BY_USER" in err_str:
+                if queue_logic.is_cancel_error(err_str):
                     cleaned = False
                     for f in state['temp_files']:
                         try:
@@ -1066,7 +1062,7 @@ class YouTubeDownloaderApp(ctk.CTk):
                         self._set_status("Đã hủy tải.", "orange")
                     return False
 
-                elif task['subtitle_opt'] and ("subtitles" in err_str.lower() or "429" in err_str):
+                elif queue_logic.should_retry_without_subtitles(task, err_str):
                     # Tự động Retry nhưng tắt phụ đề
                     task['subtitle_opt'] = False
                     retry_without_subtitles = True

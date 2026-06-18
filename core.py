@@ -3,9 +3,12 @@
 Tách riêng ra đây để có thể kiểm thử (pytest) mà không cần khởi tạo cửa sổ Tkinter.
 """
 
+from __future__ import annotations
+
 import os
 import re
 import sys
+from typing import Optional
 
 # Danh sách lựa chọn chất lượng mặc định khi chưa biết format thật của video
 DEFAULT_FORMAT_VALUES = [
@@ -27,7 +30,7 @@ DOMAIN_MAP = {
 }
 
 
-def parse_time(t_str):
+def parse_time(t_str: Optional[str]) -> tuple[Optional[float], Optional[str]]:
     """Chuyển chuỗi thời gian (HH:MM:SS / MM:SS / SS) thành giây.
 
     Trả về tuple (seconds | None, error_message | None).
@@ -57,7 +60,7 @@ def parse_time(t_str):
     return sec, None
 
 
-def get_format_string(format_choice):
+def get_format_string(format_choice: Optional[str]) -> str:
     """Trả về mã format chuẩn của yt-dlp tương ứng với lựa chọn của người dùng."""
     if format_choice == "Âm thanh (MP3)":
         return 'bestaudio/best'
@@ -71,9 +74,9 @@ def get_format_string(format_choice):
     return 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
 
 
-def heights_from_info(info):
+def heights_from_info(info: Optional[dict]) -> set[int]:
     """Lấy tập các độ phân giải (chiều cao) thật sự có của 1 video từ info dict của yt-dlp."""
-    heights = set()
+    heights: set[int] = set()
     for f in (info or {}).get('formats', []):
         # Chỉ lấy format có hình ảnh (vcodec khác 'none')
         if f.get('vcodec') and f.get('vcodec') != 'none':
@@ -83,7 +86,7 @@ def heights_from_info(info):
     return heights
 
 
-def format_values_from_info(info):
+def format_values_from_info(info: Optional[dict]) -> list[str]:
     """Dựng danh sách lựa chọn chất lượng dựa trên độ phân giải thật sự có của video.
 
     Nếu không đọc được độ phân giải nào -> trả về danh sách mặc định.
@@ -95,7 +98,7 @@ def format_values_from_info(info):
     return ["Video - Tốt nhất"] + [f"Video - {h}p" for h in sorted_h] + ["Âm thanh (MP3)"]
 
 
-def classify_folder(url):
+def classify_folder(url: Optional[str]) -> str:
     """Trả về tên thư mục phân loại theo tên miền của url (mặc định 'Others')."""
     low = (url or "").lower()
     for dom, name in DOMAIN_MAP.items():
@@ -104,7 +107,7 @@ def classify_folder(url):
     return 'Others'
 
 
-def get_ffmpeg_path():
+def get_ffmpeg_path() -> Optional[str]:
     """Tìm đường dẫn thư mục chứa ffmpeg theo thứ tự ưu tiên.
 
     1. Khi đã đóng gói (PyInstaller): dùng ffmpeg nhúng kèm.
