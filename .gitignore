@@ -37,6 +37,8 @@ venv.bak/
 *.part
 *.ytdl
 *.spec
+# Keep the PyInstaller build spec in the repo so others can build the exe
+!YouTubeDownloader.spec
 
 # IDEs
 .idea/
