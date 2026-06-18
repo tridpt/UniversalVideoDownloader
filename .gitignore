@@ -42,3 +42,7 @@ venv.bak/
 .idea/
 .vscode/
 *.swp
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/

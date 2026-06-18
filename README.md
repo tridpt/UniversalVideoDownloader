@@ -1,6 +1,8 @@
 # Universal Video Downloader
 
 [![Tests](https://github.com/tridpt/UniversalVideoDownloader/actions/workflows/tests.yml/badge.svg)](https://github.com/tridpt/UniversalVideoDownloader/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 
 A powerful, modern, and cross-platform video and audio downloader built with Python and CustomTkinter. It leverages the robust `yt-dlp` library to provide seamless downloading capabilities from almost any platform, including YouTube, Facebook, TikTok, Instagram, Twitter (X), and SoundCloud.
 
@@ -83,6 +85,13 @@ pytest -v
 
 Tests run automatically on every push and pull request via GitHub Actions (Python 3.10–3.13).
 
+## 🤝 Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup and
+guidelines. Run `ruff check .` and `pytest` before opening a PR.
+
+See [CHANGELOG.md](CHANGELOG.md) for the history of changes.
+
 ## 👨‍💻 Developer & Acknowledgments
 
 * Developed by **Trần Đức Trí**.
@@ -90,4 +99,4 @@ Tests run automatically on every push and pull request via GitHub Actions (Pytho
 
 ## 📄 License
 
-This project is open-source and available under the MIT License.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
