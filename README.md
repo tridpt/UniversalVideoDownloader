@@ -26,8 +26,11 @@ Nếu muốn chạy từ mã nguồn, xem phần [Cài đặt & Yêu cầu](#-in
   * Option to download and embed subtitles (English/Vietnamese).
   * Embed video thumbnails directly into the MP4/MP3 files.
   * Time-based cutting/cropping: Download specific parts of a video by specifying start and end times.
+  * **Container format choice**: Save video as MP4, MKV, or WEBM.
+  * **Download speed limit**: Cap the download rate (e.g. `500K`, `1.5M`) to avoid saturating your connection.
   * Browser Cookie integration: Bypass age-restricted or private content by using cookies from your installed browsers (Chrome, Edge, Firefox, Brave).
-* **Download Queue & History**: Queue up multiple downloads at once. Easily review your download history and quickly open download folders.
+* **Download Queue & History**: Queue up multiple downloads at once. Easily review your download history, export it to CSV, and quickly open download folders.
+* **Recent Folders**: Quickly switch between recently used download folders from a dropdown.
 * **Desktop Notifications**: Get a system notification when the whole queue finishes.
 * **Concurrent Downloads**: Download up to 4 videos in parallel for long queues.
 * **Drag & Drop**: Drop a link or file path onto the input box (requires optional `tkinterdnd2`).

@@ -5,6 +5,7 @@ Tách riêng để dễ kiểm thử và để main.py chỉ còn phần giao di
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 from typing import Optional
@@ -76,6 +77,28 @@ def clear_history(path: str = HISTORY_FILE) -> bool:
     try:
         if os.path.exists(path):
             os.remove(path)
+        return True
+    except Exception:
+        return False
+
+
+def export_history_csv(csv_path: str, history_path: str = HISTORY_FILE) -> bool:
+    """Xuất lịch sử tải ra file CSV (cột: title, path, filepath).
+
+    Dùng encoding utf-8-sig để Excel hiển thị đúng tiếng Việt.
+    Trả về True nếu ghi thành công.
+    """
+    try:
+        data = load_history(history_path)
+        with open(csv_path, 'w', newline='', encoding='utf-8-sig') as f:
+            writer = csv.writer(f)
+            writer.writerow(['title', 'path', 'filepath'])
+            for item in data:
+                writer.writerow([
+                    item.get('title', ''),
+                    item.get('path', ''),
+                    item.get('filepath', ''),
+                ])
         return True
     except Exception:
         return False

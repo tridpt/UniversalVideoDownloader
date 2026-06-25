@@ -51,17 +51,22 @@ def build_ydl_opts(task: dict, out_template: str, ffmpeg_dir: Optional[str] = No
     """
     is_playlist = task.get('is_playlist', False)
     format_choice = task.get('format_choice', "Video - Tốt nhất")
+    container = task.get('container', 'mp4')
 
     ydl_opts = {
         'outtmpl': out_template,
         'noplaylist': not is_playlist,
         'quiet': True,
         'no_warnings': True,
-        'format': get_format_string(format_choice),
+        'format': get_format_string(format_choice, container),
     }
 
     if progress_hook is not None:
         ydl_opts['progress_hooks'] = [progress_hook]
+
+    # Giới hạn tốc độ tải (byte/giây) nếu người dùng có đặt
+    if task.get('rate_limit'):
+        ydl_opts['ratelimit'] = task['rate_limit']
 
     # Chỉ set khi tìm thấy ffmpeg; nếu None để yt-dlp tự dò trong PATH
     if ffmpeg_dir:
@@ -85,7 +90,7 @@ def build_ydl_opts(task: dict, out_template: str, ffmpeg_dir: Optional[str] = No
             'preferredquality': '192',
         }]
     else:
-        ydl_opts['merge_output_format'] = 'mp4'
+        ydl_opts['merge_output_format'] = container
 
     if task.get('thumbnail_opt'):
         ydl_opts['writethumbnail'] = True

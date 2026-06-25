@@ -8,11 +8,16 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Giới hạn tốc độ tải (vd `500K`, `1.5M`) để không chiếm hết băng thông.
+- Chọn định dạng hộp chứa video: MP4 / MKV / WEBM.
+- Xuất lịch sử tải ra file CSV (mở được bằng Excel, hỗ trợ tiếng Việt).
+- Dropdown thư mục tải gần đây để chuyển nhanh.
 - Workflow GitHub Actions tự build `.exe` và tạo Release khi push tag `v*`.
 - Badge phiên bản release và mục "Tải về (Download)" trong README.
 - Test cho `resolve_final_filepath` (suy ra đường dẫn file sau khi tải).
 
 ### Changed
+- `get_format_string` nhận thêm tham số container; `build_ydl_opts` hỗ trợ `container` và `rate_limit`.
 - Tách `resolve_final_filepath` thành hàm thuần trong `core.py` (tiêm `exists` để kiểm thử).
 
 ## [1.0.0] - 2026-06-26

@@ -316,3 +316,96 @@ class TestResolveFinalFilepath:
         info = {'requested_downloads': [{'_filename': '/d/a.mp4'}]}
         result = core.resolve_final_filepath(info, is_audio=False, exists=lambda p: True)
         assert result == '/d/a.mp4'
+
+
+# ---------------------- get_format_string container-aware ----------------------
+
+class TestGetFormatStringContainer:
+    def test_mp4_default_unchanged(self):
+        # Không truyền container -> hành vi cũ (ép ext mp4)
+        result = core.get_format_string("Video - 1080p")
+        assert '[ext=mp4]' in result
+
+    def test_mkv_no_ext_constraint(self):
+        result = core.get_format_string("Video - 1080p", container="mkv")
+        assert 'ext=mp4' not in result
+        assert 'height<=1080' in result
+
+    def test_webm_best(self):
+        result = core.get_format_string("Video - Tốt nhất", container="webm")
+        assert result == 'bestvideo+bestaudio/best'
+
+    def test_audio_ignores_container(self):
+        assert core.get_format_string("Âm thanh (MP3)", container="mkv") == 'bestaudio/best'
+
+    def test_container_case_insensitive(self):
+        result = core.get_format_string("Video - 720p", container="MKV")
+        assert 'ext=mp4' not in result
+
+
+# ---------------------- parse_rate_limit ----------------------
+
+class TestParseRateLimit:
+    def test_empty_is_unlimited(self):
+        assert core.parse_rate_limit("") == (None, None)
+        assert core.parse_rate_limit(None) == (None, None)
+        assert core.parse_rate_limit("   ") == (None, None)
+
+    def test_kilobytes(self):
+        rate, err = core.parse_rate_limit("500K")
+        assert err is None
+        assert rate == 500 * 1024
+
+    def test_megabytes_decimal(self):
+        rate, err = core.parse_rate_limit("1.5M")
+        assert err is None
+        assert rate == int(1.5 * 1024 * 1024)
+
+    def test_gigabytes(self):
+        rate, err = core.parse_rate_limit("2G")
+        assert err is None
+        assert rate == 2 * 1024 ** 3
+
+    def test_plain_bytes(self):
+        rate, err = core.parse_rate_limit("1024")
+        assert err is None
+        assert rate == 1024
+
+    def test_with_b_and_per_second_suffix(self):
+        rate, err = core.parse_rate_limit("500KB/s")
+        assert err is None
+        assert rate == 500 * 1024
+
+    def test_invalid_format(self):
+        rate, err = core.parse_rate_limit("fast")
+        assert rate is None
+        assert err is not None
+
+    def test_zero_rejected(self):
+        rate, err = core.parse_rate_limit("0")
+        assert rate is None
+        assert err is not None
+
+
+# ---------------------- update_recent_folders ----------------------
+
+class TestUpdateRecentFolders:
+    def test_insert_into_empty(self):
+        assert core.update_recent_folders([], "/a") == ["/a"]
+        assert core.update_recent_folders(None, "/a") == ["/a"]
+
+    def test_new_goes_to_front(self):
+        assert core.update_recent_folders(["/a", "/b"], "/c") == ["/c", "/a", "/b"]
+
+    def test_dedup_moves_to_front(self):
+        assert core.update_recent_folders(["/a", "/b", "/c"], "/b") == ["/b", "/a", "/c"]
+
+    def test_respects_max(self):
+        result = core.update_recent_folders(["/a", "/b", "/c", "/d", "/e"], "/f", max_n=5)
+        assert len(result) == 5
+        assert result[0] == "/f"
+        assert "/e" not in result
+
+    def test_empty_new_folder_ignored(self):
+        assert core.update_recent_folders(["/a"], "") == ["/a"]
+        assert core.update_recent_folders(["/a"], "   ") == ["/a"]

@@ -77,6 +77,16 @@ class UniversalVideoDownloaderApp(ctk.CTk):
         self.btn_open_dir = ctk.CTkButton(self.folder_frame, text="📂 Mở", width=60, height=35, command=self.open_save_dir, fg_color="#2980b9", hover_color="#3498db")
         self.btn_open_dir.pack(side="left", padx=(0, 15))
 
+        # Danh sách thư mục tải gần đây (chọn nhanh)
+        self.recent_dirs = self.app_config.get('recent_dirs', [])
+        self.recent_var = ctk.StringVar(value="Gần đây ▾")
+        self.recent_menu = ctk.CTkOptionMenu(
+            self.folder_frame, values=(self.recent_dirs or ["(trống)"]),
+            variable=self.recent_var, command=self._on_recent_selected,
+            width=110, height=35, font=ctk.CTkFont(size=11)
+        )
+        self.recent_menu.pack(side="left", padx=(0, 15))
+
         self.smart_folder_var = ctk.BooleanVar(value=self.app_config.get('smart_folder', True))
         self.smart_folder_cb = ctk.CTkCheckBox(self.folder_frame, text="Phân loại nền tảng ngầm (VD: /Youtube)", variable=self.smart_folder_var, font=ctk.CTkFont(size=12, weight="bold"))
         self.smart_folder_cb.pack(side="left")
@@ -114,6 +124,16 @@ class UniversalVideoDownloaderApp(ctk.CTk):
             font=ctk.CTkFont(size=12)
         )
         self.cookie_menu.pack(side="left", padx=10)
+
+        self.container_var = ctk.StringVar(value=self.app_config.get('container', "MP4"))
+        self.container_menu = ctk.CTkOptionMenu(
+            self.options_frame,
+            values=["MP4", "MKV", "WEBM"],
+            variable=self.container_var,
+            width=90, height=35,
+            font=ctk.CTkFont(size=12)
+        )
+        self.container_menu.pack(side="left", padx=10)
 
         # Thiết lập sự kiện thay đổi
         self.playlist_var.trace_add("write", self.on_playlist_toggle)
@@ -154,6 +174,12 @@ class UniversalVideoDownloaderApp(ctk.CTk):
         self.end_var = ctk.StringVar()
         self.end_entry = ctk.CTkEntry(self.adv_frame, textvariable=self.end_var, width=55, height=28, placeholder_text="05:30")
         self.end_entry.pack(side="left", padx=(2, 10))
+
+        self.rate_label = ctk.CTkLabel(self.adv_frame, text=" |  Giới hạn:", font=ctk.CTkFont(size=12))
+        self.rate_label.pack(side="left", padx=(5, 2))
+        self.rate_var = ctk.StringVar(value=self.app_config.get('rate_limit_str', ''))
+        self.rate_entry = ctk.CTkEntry(self.adv_frame, textvariable=self.rate_var, width=70, height=28, placeholder_text="vd: 1.5M")
+        self.rate_entry.pack(side="left", padx=(2, 10))
 
         # Theo dõi sự thay đổi menu chọn format để tính toán lại dung lượng
         self.format_var.trace_add("write", self.on_format_change)
@@ -239,6 +265,9 @@ class UniversalVideoDownloaderApp(ctk.CTk):
         self.clear_history_btn = ctk.CTkButton(self.history_header_frame, text="🗑️ Xóa", width=40, height=22, fg_color="#c0392b", hover_color="#e74c3c", font=ctk.CTkFont(size=11), command=self.clear_history_data)
         self.clear_history_btn.pack(side="right")
 
+        self.export_csv_btn = ctk.CTkButton(self.history_header_frame, text="⬇ CSV", width=48, height=22, fg_color="#16a085", hover_color="#1abc9c", font=ctk.CTkFont(size=11), command=self.export_history_csv)
+        self.export_csv_btn.pack(side="right", padx=(0, 6))
+
         self.history_scroll = ctk.CTkScrollableFrame(self.history_frame, fg_color="transparent")
         self.history_scroll.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
@@ -283,6 +312,9 @@ class UniversalVideoDownloaderApp(ctk.CTk):
             'thumbnail_opt': self.thumbnail_var.get(),
             'subtitle_opt': self.subtitle_var.get(),
             'cookie_choice': self.cookie_var.get(),
+            'container': self.container_var.get(),
+            'rate_limit_str': self.rate_var.get(),
+            'recent_dirs': self.recent_dirs,
             'concurrency': self._get_concurrency(),
             'appearance_mode': 'Dark' if self.appearance_mode_switch.get() == 1 else 'Light',
         }
@@ -476,6 +508,35 @@ class UniversalVideoDownloaderApp(ctk.CTk):
         folder = filedialog.askdirectory(initialdir=self.save_dir.get())
         if folder:
             self.save_dir.set(folder)
+            self._remember_dir(folder)
+
+    def _remember_dir(self, folder):
+        """Cập nhật danh sách thư mục gần đây và làm mới dropdown."""
+        self.recent_dirs = core.update_recent_folders(self.recent_dirs, folder)
+        try:
+            self.recent_menu.configure(values=(self.recent_dirs or ["(trống)"]))
+        except Exception:
+            pass
+
+    def _on_recent_selected(self, choice):
+        """Người dùng chọn 1 thư mục gần đây từ dropdown."""
+        if choice and choice != "(trống)":
+            self.save_dir.set(choice)
+        self.recent_var.set("Gần đây ▾")
+
+    def export_history_csv(self):
+        """Xuất lịch sử tải ra file CSV do người dùng chọn."""
+        path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV", "*.csv"), ("All files", "*.*")],
+            initialfile="lich_su_tai.csv",
+        )
+        if not path:
+            return
+        if config_store.export_history_csv(path):
+            self.status_label.configure(text="Đã xuất lịch sử ra CSV!", text_color="green")
+        else:
+            self.status_label.configure(text="Lỗi khi xuất CSV!", text_color="red")
 
     def open_save_dir(self):
         folder = self.save_dir.get()
@@ -758,6 +819,14 @@ class UniversalVideoDownloaderApp(ctk.CTk):
             self.status_label.configure(text="Lỗi: Thời gian 'Đến' phải lớn hơn 'Từ'", text_color="red")
             return
 
+        rate_limit, rate_err = core.parse_rate_limit(self.rate_var.get())
+        if rate_err:
+            self.status_label.configure(text=f"Lỗi giới hạn tốc độ: {rate_err}", text_color="red")
+            return
+
+        # Ghi nhớ thư mục tải hiện tại vào danh sách gần đây
+        self._remember_dir(self.save_dir.get())
+
         task = {
             'url': url,
             'download_folder': self.save_dir.get(),
@@ -766,6 +835,8 @@ class UniversalVideoDownloaderApp(ctk.CTk):
             'cookie_opt': self._get_cookie_opts(),
             'subtitle_opt': self.subtitle_var.get(),
             'thumbnail_opt': self.thumbnail_var.get(),
+            'container': self.container_var.get().lower(),
+            'rate_limit': rate_limit,
             'start_sec': start_sec,
             'end_sec': end_sec,
             'smart_folder': self.smart_folder_var.get()

@@ -64,18 +64,63 @@ def parse_time(t_str: Optional[str]) -> tuple[Optional[float], Optional[str]]:
     return sec, None
 
 
-def get_format_string(format_choice: Optional[str]) -> str:
-    """Trả về mã format chuẩn của yt-dlp tương ứng với lựa chọn của người dùng."""
+def get_format_string(format_choice: Optional[str], container: str = "mp4") -> str:
+    """Trả về mã format chuẩn của yt-dlp tương ứng với lựa chọn của người dùng.
+
+    container: định dạng hộp chứa mong muốn ('mp4', 'mkv', 'webm'). Với 'mp4'
+    sẽ ưu tiên ext mp4/m4a; với mkv/webm thì không ép ext để merge linh hoạt.
+    """
     if format_choice == "Âm thanh (MP3)":
         return 'bestaudio/best'
-    # Bắt mọi nhãn dạng "Video - <số>p" (1080p, 1440p, 2160p, ...) một cách tổng quát
+
+    container = (container or "mp4").lower()
     m = re.search(r'(\d+)p', format_choice or "")
+
+    if container == "mp4":
+        if m:
+            h = m.group(1)
+            return (f'bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]/'
+                    f'best[height<={h}][ext=mp4]/best')
+        # Video - Tốt nhất (hoặc không xác định)
+        return 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+
+    # mkv / webm: không ép ext mp4 để hộp chứa nhận mọi codec
     if m:
         h = m.group(1)
-        return (f'bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]/'
-                f'best[height<={h}][ext=mp4]/best')
-    # Video - Tốt nhất (hoặc không xác định)
-    return 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        return f'bestvideo[height<={h}]+bestaudio/best[height<={h}]/best'
+    return 'bestvideo+bestaudio/best'
+
+
+def parse_rate_limit(text: Optional[str]) -> tuple[Optional[int], Optional[str]]:
+    """Chuyển chuỗi giới hạn tốc độ (vd '500K', '1.5M', '2M', '1024') thành byte/giây.
+
+    Trả về tuple (rate | None, error | None).
+    - Bỏ trống là hợp lệ (không giới hạn) -> (None, None)
+    - Sai định dạng -> (None, "<thông báo lỗi>")
+    """
+    text = (text or "").strip()
+    if not text:
+        return None, None
+    m = re.fullmatch(r'(\d+(?:\.\d+)?)\s*([kmg]?)b?(?:/s)?', text, re.IGNORECASE)
+    if not m:
+        return None, f"Tốc độ '{text}' sai định dạng (vd: 500K, 1.5M, 2M)"
+    value = float(m.group(1))
+    unit = m.group(2).upper()
+    mult = {'': 1, 'K': 1024, 'M': 1024 ** 2, 'G': 1024 ** 3}[unit]
+    rate = int(value * mult)
+    if rate <= 0:
+        return None, "Tốc độ phải lớn hơn 0"
+    return rate, None
+
+
+def update_recent_folders(folders: Optional[list], new_folder: Optional[str],
+                          max_n: int = 5) -> list:
+    """Cập nhật danh sách thư mục tải gần đây: đưa new_folder lên đầu, bỏ trùng, giới hạn max_n."""
+    new_folder = (new_folder or "").strip()
+    result = [f for f in (folders or []) if f and f != new_folder]
+    if new_folder:
+        result.insert(0, new_folder)
+    return result[:max_n]
 
 
 def heights_from_info(info: Optional[dict]) -> set[int]:

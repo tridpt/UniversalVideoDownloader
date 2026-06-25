@@ -178,3 +178,60 @@ class TestBuildDownloadRanges:
         opts = downloader.build_ydl_opts(_base_task(), "o", download_ranges=fn)
         assert opts['download_ranges'] is fn
         assert opts['force_keyframes_at_cuts'] is True
+
+
+# ---------------------- container & rate_limit trong build_ydl_opts ----------------------
+
+class TestContainerAndRateLimit:
+    def test_default_container_is_mp4(self):
+        opts = downloader.build_ydl_opts(_base_task(), "o")
+        assert opts['merge_output_format'] == 'mp4'
+
+    def test_mkv_container(self):
+        opts = downloader.build_ydl_opts(_base_task(container='mkv'), "o")
+        assert opts['merge_output_format'] == 'mkv'
+        assert 'ext=mp4' not in opts['format']
+
+    def test_webm_container(self):
+        opts = downloader.build_ydl_opts(_base_task(container='webm'), "o")
+        assert opts['merge_output_format'] == 'webm'
+
+    def test_mp3_ignores_container(self):
+        opts = downloader.build_ydl_opts(
+            _base_task(format_choice="Âm thanh (MP3)", container='mkv'), "o")
+        assert 'merge_output_format' not in opts
+
+    def test_rate_limit_set(self):
+        opts = downloader.build_ydl_opts(_base_task(rate_limit=512000), "o")
+        assert opts['ratelimit'] == 512000
+
+    def test_rate_limit_absent_when_none(self):
+        opts = downloader.build_ydl_opts(_base_task(rate_limit=None), "o")
+        assert 'ratelimit' not in opts
+
+
+# ---------------------- export_history_csv ----------------------
+
+class TestExportHistoryCsv:
+    def test_export_writes_header_and_rows(self, tmp_path):
+        hist = str(tmp_path / "h.json")
+        config_store.add_history("Vid A", "/folder", filepath="/folder/a.mp4", path=hist)
+        config_store.add_history("Vid B", "/folder", path=hist)
+
+        csv_path = str(tmp_path / "out.csv")
+        assert config_store.export_history_csv(csv_path, history_path=hist) is True
+
+        with open(csv_path, encoding='utf-8-sig') as f:
+            content = f.read()
+        assert "title,path,filepath" in content
+        assert "Vid A" in content
+        assert "Vid B" in content
+        assert "/folder/a.mp4" in content
+
+    def test_export_empty_history(self, tmp_path):
+        hist = str(tmp_path / "none.json")
+        csv_path = str(tmp_path / "out.csv")
+        assert config_store.export_history_csv(csv_path, history_path=hist) is True
+        with open(csv_path, encoding='utf-8-sig') as f:
+            lines = f.read().strip().splitlines()
+        assert lines == ["title,path,filepath"]
