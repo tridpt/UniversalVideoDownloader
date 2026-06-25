@@ -28,7 +28,7 @@ A powerful, modern, and cross-platform video and audio downloader built with Pyt
 
 ## 🚀 Installation & Requirements
 
-Ensure you have **Python 3.8+** installed on your system. 
+Ensure you have **Python 3.10+** installed on your system. 
 
 1. **Clone the repository:**
    ```bash

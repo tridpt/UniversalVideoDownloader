@@ -18,7 +18,7 @@ from core import get_ffmpeg_path
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
-class YouTubeDownloaderApp(ctk.CTk):
+class UniversalVideoDownloaderApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
@@ -309,15 +309,6 @@ class YouTubeDownloaderApp(ctk.CTk):
     def _set_progress(self, value):
         """Cập nhật thanh tiến trình an toàn từ thread phụ."""
         self._ui(lambda: self.progress_bar.set(value))
-
-    def _notify(self, title, message):
-        """Hiện thông báo hệ thống (toast). Bỏ qua lặng lẽ nếu không hỗ trợ."""
-        try:
-            from plyer import notification
-            notification.notify(title=title, message=message,
-                                 app_name="Universal Video Downloader", timeout=10)
-        except Exception:
-            pass
 
     def _notify(self, title, message):
         """Hiện thông báo hệ thống (toast). Lặng lẽ bỏ qua nếu không hỗ trợ."""
@@ -760,7 +751,6 @@ class YouTubeDownloaderApp(ctk.CTk):
             return None
 
     def _render_history_item(self, title, download_folder, filepath=None):
-        import os
         item_frame = ctk.CTkFrame(self.history_scroll, corner_radius=5)
         item_frame.pack(fill="x", pady=2)
 
@@ -1079,5 +1069,5 @@ class YouTubeDownloaderApp(ctk.CTk):
             return False
 
 if __name__ == "__main__":
-    app = YouTubeDownloaderApp()
+    app = UniversalVideoDownloaderApp()
     app.mainloop()

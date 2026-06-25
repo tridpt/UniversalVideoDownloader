@@ -2,7 +2,7 @@
 """Cấu hình PyInstaller cho Universal Video Downloader.
 
 Đóng gói thành 1 file .exe, nhúng kèm ffmpeg từ package static_ffmpeg.
-Build: pyinstaller YouTubeDownloader.spec
+Build: pyinstaller UniversalVideoDownloader.spec
 """
 
 import os
@@ -34,7 +34,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='YouTubeDownloader',
+    name='UniversalVideoDownloader',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
