@@ -1,12 +1,19 @@
 # Universal Video Downloader
 
 [![Tests](https://github.com/tridpt/UniversalVideoDownloader/actions/workflows/tests.yml/badge.svg)](https://github.com/tridpt/UniversalVideoDownloader/actions/workflows/tests.yml)
+[![Release](https://img.shields.io/github/v/release/tridpt/UniversalVideoDownloader)](https://github.com/tridpt/UniversalVideoDownloader/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 
 A powerful, modern, and cross-platform video and audio downloader built with Python and CustomTkinter. It leverages the robust `yt-dlp` library to provide seamless downloading capabilities from almost any platform, including YouTube, Facebook, TikTok, Instagram, Twitter (X), and SoundCloud.
 
 ![Universal Video Downloader UI](docs/screenshot.png)
+
+## ⬇️ Tải về (Download)
+
+Tải bản `.exe` mới nhất cho Windows tại trang [Releases](https://github.com/tridpt/UniversalVideoDownloader/releases/latest) — không cần cài Python, chạy trực tiếp.
+
+Nếu muốn chạy từ mã nguồn, xem phần [Cài đặt & Yêu cầu](#-installation--requirements) bên dưới.
 
 ## 🌟 Features
 

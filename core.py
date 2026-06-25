@@ -161,6 +161,44 @@ def format_duration(seconds: Optional[float]) -> str:
     return f"Thời lượng: {mins} phút {secs} giây"
 
 
+def resolve_final_filepath(info: Optional[dict], is_audio: bool,
+                           exists=os.path.exists) -> Optional[str]:
+    """Suy ra đường dẫn file cuối cùng sau khi tải từ info dict của yt-dlp.
+
+    is_audio: True nếu tải dạng MP3 (yt-dlp đổi đuôi sau hậu xử lý).
+    exists:   hàm kiểm tra tồn tại file (tiêm vào để dễ kiểm thử).
+    Trả về đường dẫn file (str) hoặc None nếu không suy ra được.
+    """
+    try:
+        info = info or {}
+        candidate = None
+        requested = info.get('requested_downloads')
+        if requested and isinstance(requested, list):
+            candidate = requested[0].get('filepath') or requested[0].get('_filename')
+        if not candidate:
+            candidate = info.get('_filename') or info.get('filename')
+
+        if not candidate:
+            return None
+
+        # Nếu là MP3: yt-dlp đổi đuôi sau hậu xử lý
+        if is_audio:
+            mp3 = os.path.splitext(candidate)[0] + ".mp3"
+            if exists(mp3):
+                return mp3
+        # Nếu file gốc (đã merge) còn đó
+        if exists(candidate):
+            return candidate
+        # Dò các đuôi khả dĩ khác
+        base = os.path.splitext(candidate)[0]
+        for ext in ['.mp4', '.mkv', '.webm', '.m4a', '.mp3']:
+            if exists(base + ext):
+                return base + ext
+        return candidate
+    except Exception:
+        return None
+
+
 def get_ffmpeg_path() -> Optional[str]:
     """Tìm đường dẫn thư mục chứa ffmpeg theo thứ tự ưu tiên.
 

@@ -696,34 +696,8 @@ class UniversalVideoDownloaderApp(ctk.CTk):
 
     def _resolve_final_filepath(self, info, download_folder):
         """Suy ra đường dẫn file cuối cùng sau khi tải (xét cả chuyển sang .mp3)."""
-        try:
-            # yt-dlp cung cấp đường dẫn các file đã tải
-            candidate = None
-            requested = info.get('requested_downloads')
-            if requested and isinstance(requested, list):
-                candidate = requested[0].get('filepath') or requested[0].get('_filename')
-            if not candidate:
-                candidate = info.get('_filename') or info.get('filename')
-
-            if not candidate:
-                return None
-
-            # Nếu là MP3: yt-dlp đổi đuôi sau hậu xử lý
-            if self.format_var.get() == "Âm thanh (MP3)":
-                base = os.path.splitext(candidate)[0]
-                mp3 = base + ".mp3"
-                if os.path.exists(mp3):
-                    return mp3
-            # Nếu merge sang mp4
-            if os.path.exists(candidate):
-                return candidate
-            base = os.path.splitext(candidate)[0]
-            for ext in ['.mp4', '.mkv', '.webm', '.m4a', '.mp3']:
-                if os.path.exists(base + ext):
-                    return base + ext
-            return candidate
-        except Exception:
-            return None
+        is_audio = self.format_var.get() == "Âm thanh (MP3)"
+        return core.resolve_final_filepath(info, is_audio)
 
     def _render_history_item(self, title, download_folder, filepath=None):
         item_frame = ctk.CTkFrame(self.history_scroll, corner_radius=5)

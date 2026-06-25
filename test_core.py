@@ -265,3 +265,54 @@ class TestFormatDuration:
 
     def test_float_truncated(self):
         assert core.format_duration(90.9) == "Thời lượng: 1 phút 30 giây"
+
+
+# ---------------------- resolve_final_filepath ----------------------
+
+class TestResolveFinalFilepath:
+    def test_requested_downloads_filepath(self):
+        info = {'requested_downloads': [{'filepath': '/d/video.mp4'}]}
+        # exists luôn True -> trả về chính candidate
+        result = core.resolve_final_filepath(info, is_audio=False, exists=lambda p: True)
+        assert result == '/d/video.mp4'
+
+    def test_falls_back_to_underscore_filename(self):
+        info = {'_filename': '/d/clip.mp4'}
+        result = core.resolve_final_filepath(info, is_audio=False, exists=lambda p: True)
+        assert result == '/d/clip.mp4'
+
+    def test_no_candidate_returns_none(self):
+        assert core.resolve_final_filepath({}, is_audio=False, exists=lambda p: True) is None
+        assert core.resolve_final_filepath(None, is_audio=False, exists=lambda p: True) is None
+
+    def test_audio_prefers_mp3(self):
+        info = {'_filename': '/d/song.webm'}
+        # Chỉ file .mp3 tồn tại
+        result = core.resolve_final_filepath(
+            info, is_audio=True, exists=lambda p: p == '/d/song.mp3')
+        assert result == '/d/song.mp3'
+
+    def test_audio_without_mp3_falls_through(self):
+        info = {'_filename': '/d/song.webm'}
+        # Không có mp3, nhưng file gốc tồn tại
+        result = core.resolve_final_filepath(
+            info, is_audio=True, exists=lambda p: p == '/d/song.webm')
+        assert result == '/d/song.webm'
+
+    def test_probes_alternate_extensions(self):
+        info = {'_filename': '/d/movie.webm'}
+        # File gốc .webm không còn, nhưng đã merge sang .mkv
+        result = core.resolve_final_filepath(
+            info, is_audio=False, exists=lambda p: p == '/d/movie.mkv')
+        assert result == '/d/movie.mkv'
+
+    def test_returns_candidate_when_nothing_exists(self):
+        info = {'_filename': '/d/ghost.mp4'}
+        # Không file nào tồn tại -> vẫn trả candidate gốc
+        result = core.resolve_final_filepath(info, is_audio=False, exists=lambda p: False)
+        assert result == '/d/ghost.mp4'
+
+    def test_requested_downloads_underscore_filename(self):
+        info = {'requested_downloads': [{'_filename': '/d/a.mp4'}]}
+        result = core.resolve_final_filepath(info, is_audio=False, exists=lambda p: True)
+        assert result == '/d/a.mp4'

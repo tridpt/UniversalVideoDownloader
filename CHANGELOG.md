@@ -7,6 +7,14 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Workflow GitHub Actions tự build `.exe` và tạo Release khi push tag `v*`.
+- Badge phiên bản release và mục "Tải về (Download)" trong README.
+- Test cho `resolve_final_filepath` (suy ra đường dẫn file sau khi tải).
+
+### Changed
+- Tách `resolve_final_filepath` thành hàm thuần trong `core.py` (tiêm `exists` để kiểm thử).
+
 ## [1.0.0] - 2026-06-26
 
 ### Added
