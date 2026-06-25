@@ -29,8 +29,9 @@ class UniversalVideoDownloaderApp(ctk.CTk):
         self._concurrent_active = 1  # Số task đang tải song song (cập nhật lúc chạy)
 
         self.title("Universal Video Downloader")
-        self.geometry("1100x820")
-        self.resizable(False, False)
+        self.geometry("1300x840")
+        self.minsize(1180, 780)
+        self.resizable(True, True)
 
         # === PHẦN BÊN TRÁI (KHU VỰC TẢI VIDEO) ===
         self.main_frame = ctk.CTkFrame(self, fg_color="transparent")

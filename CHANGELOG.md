@@ -7,6 +7,8 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-26
+
 ### Added
 - Giới hạn tốc độ tải (vd `500K`, `1.5M`) để không chiếm hết băng thông.
 - Chọn định dạng hộp chứa video: MP4 / MKV / WEBM.
@@ -19,6 +21,10 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/).
 ### Changed
 - `get_format_string` nhận thêm tham số container; `build_ydl_opts` hỗ trợ `container` và `rate_limit`.
 - Tách `resolve_final_filepath` thành hàm thuần trong `core.py` (tiêm `exists` để kiểm thử).
+- Cửa sổ rộng hơn (1300px) và cho phép kéo giãn (có giới hạn tối thiểu).
+
+### Fixed
+- Sửa panel lịch sử bị cắt và nút chuyển sáng/tối nằm ngoài màn hình khi thêm control mới.
 
 ## [1.0.0] - 2026-06-26
 
@@ -53,5 +59,6 @@ và dự án tuân theo [Semantic Versioning](https://semver.org/).
 - Sửa cảnh báo CTkLabel khi xóa ảnh (dùng `None` thay cho chuỗi rỗng).
 - Gỡ hàm `_notify` định nghĩa trùng và `import os` thừa.
 
-[Unreleased]: https://github.com/tridpt/UniversalVideoDownloader/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/tridpt/UniversalVideoDownloader/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/tridpt/UniversalVideoDownloader/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/tridpt/UniversalVideoDownloader/releases/tag/v1.0.0
