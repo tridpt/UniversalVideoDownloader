@@ -150,3 +150,31 @@ class TestConfigStore:
         config_store.add_history("X", "/x", path=p)
         assert config_store.clear_history(p) is True
         assert config_store.load_history(p) == []
+
+
+# ---------------------- build_download_ranges ----------------------
+
+class TestBuildDownloadRanges:
+    def test_both_none_returns_none(self):
+        assert downloader.build_download_ranges(None, None) is None
+
+    def test_start_only_opens_end(self):
+        fn = downloader.build_download_ranges(10, None)
+        ranges = fn({}, None)
+        assert ranges[0][0] == 10
+        assert ranges[0][1] == float('inf')
+
+    def test_end_only_starts_at_zero(self):
+        fn = downloader.build_download_ranges(None, 30)
+        ranges = fn({}, None)
+        assert ranges[0] == (0, 30)
+
+    def test_both_set(self):
+        fn = downloader.build_download_ranges(5, 25)
+        assert fn({}, None) == [(5, 25)]
+
+    def test_integrates_with_build_ydl_opts(self):
+        fn = downloader.build_download_ranges(0, 10)
+        opts = downloader.build_ydl_opts(_base_task(), "o", download_ranges=fn)
+        assert opts['download_ranges'] is fn
+        assert opts['force_keyframes_at_cuts'] is True

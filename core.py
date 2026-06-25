@@ -19,6 +19,10 @@ DEFAULT_FORMAT_VALUES = [
     "Âm thanh (MP3)",
 ]
 
+# Nhãn lựa chọn "không dùng cookie" và tiền tố các lựa chọn cookie theo trình duyệt
+NO_COOKIE_LABEL = "Không Dùng Cookie"
+COOKIE_PREFIX = "Tài khoản "
+
 # Bản đồ tên miền -> tên thư mục phân loại
 DOMAIN_MAP = {
     'youtube.com': 'YouTube', 'youtu.be': 'YouTube',
@@ -105,6 +109,56 @@ def classify_folder(url: Optional[str]) -> str:
         if dom in low:
             return name
     return 'Others'
+
+
+def cookie_opts_from_choice(choice: Optional[str]) -> Optional[tuple]:
+    """Chuyển lựa chọn cookie của người dùng thành tham số 'cookiesfrombrowser' của yt-dlp.
+
+    "Không Dùng Cookie" hoặc rỗng -> None.
+    "Tài khoản Chrome" -> ('chrome',)
+    """
+    choice = (choice or "").strip()
+    if not choice or choice == NO_COOKIE_LABEL:
+        return None
+    browser = choice.replace(COOKIE_PREFIX, "").strip().lower()
+    if not browser:
+        return None
+    return (browser,)
+
+
+def total_filesize_bytes(info: Optional[dict]) -> int:
+    """Tính tổng dung lượng (byte) ước tính của 1 video từ info dict của yt-dlp.
+
+    Gộp các 'requested_formats' (video + audio tách rời) nếu có, ngược lại dùng
+    'filesize'/'filesize_approx' của chính info. Trả về 0 nếu không xác định được.
+    """
+    info = info or {}
+    requested = info.get('requested_formats')
+    if requested:
+        total = 0
+        for f in requested:
+            total += f.get('filesize') or f.get('filesize_approx') or 0
+        return total
+    return info.get('filesize') or info.get('filesize_approx') or 0
+
+
+def human_size_label(file_size_bytes: int) -> str:
+    """Tạo nhãn dung lượng hiển thị từ số byte.
+
+    > 0  -> "Dung lượng cỡ: ~12.3 MB"
+    <= 0 -> "Dung lượng: [Chưa rõ]"
+    """
+    if file_size_bytes and file_size_bytes > 0:
+        mb_size = file_size_bytes / (1024 * 1024)
+        return f"Dung lượng cỡ: ~{mb_size:.1f} MB"
+    return "Dung lượng: [Chưa rõ]"
+
+
+def format_duration(seconds: Optional[float]) -> str:
+    """Định dạng thời lượng (giây) thành chuỗi 'Thời lượng: X phút Y giây'."""
+    total = int(seconds or 0)
+    mins, secs = divmod(total, 60)
+    return f"Thời lượng: {mins} phút {secs} giây"
 
 
 def get_ffmpeg_path() -> Optional[str]:

@@ -523,11 +523,7 @@ class UniversalVideoDownloaderApp(ctk.CTk):
             self.fetch_video_info()
 
     def _get_cookie_opts(self):
-        choice = self.cookie_var.get()
-        if choice != "Không Dùng Cookie":
-            browser = choice.replace("Tài khoản ", "").lower()
-            return (browser,) # Trả về tuple ('chrome', ...)
-        return None
+        return core.cookie_opts_from_choice(self.cookie_var.get())
 
     def _thread_fetch_size_only(self, url, format_choice):
         if self.playlist_var.get():
@@ -545,19 +541,10 @@ class UniversalVideoDownloaderApp(ctk.CTk):
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
 
-            file_size_bytes = 0
-            if 'requested_formats' in info:
-                for f in info['requested_formats']:
-                    file_size_bytes += f.get('filesize') or f.get('filesize_approx') or 0
-            else:
-                file_size_bytes = info.get('filesize') or info.get('filesize_approx') or 0
+            file_size_bytes = core.total_filesize_bytes(info)
 
             text = self.video_duration_label.cget("text").split(" | ")[0]
-            if file_size_bytes > 0:
-                mb_size = file_size_bytes / (1024 * 1024)
-                new_text = f"{text} | Dung lượng cỡ: ~{mb_size:.1f} MB"
-            else:
-                new_text = f"{text} | Dung lượng: [Chưa rõ]"
+            new_text = f"{text} | {core.human_size_label(file_size_bytes)}"
             self._ui(lambda: self.video_duration_label.configure(text=new_text))
         except Exception:
             pass # Lặng lẽ bỏ qua nếu lỗi cập nhật ngầm
@@ -618,22 +605,10 @@ class UniversalVideoDownloaderApp(ctk.CTk):
             else:
                 # Nếu là 1 Video đơn
                 title = info.get('title', 'Tên video không xác định')
-                duration = info.get('duration', 0)
-                mins, secs = divmod(duration, 60)
-                duration_str = f"Thời lượng: {int(mins)} phút {int(secs)} giây"
+                duration_str = core.format_duration(info.get('duration', 0))
 
-                file_size_bytes = 0
-                if 'requested_formats' in info:
-                    for f in info['requested_formats']:
-                        file_size_bytes += f.get('filesize') or f.get('filesize_approx') or 0
-                else:
-                    file_size_bytes = info.get('filesize') or info.get('filesize_approx') or 0
-
-                if file_size_bytes > 0:
-                    mb_size = file_size_bytes / (1024 * 1024)
-                    duration_str += f" | Dung lượng cỡ: ~{mb_size:.1f} MB"
-                else:
-                    duration_str += " | Dung lượng: [Chưa rõ]"
+                file_size_bytes = core.total_filesize_bytes(info)
+                duration_str += f" | {core.human_size_label(file_size_bytes)}"
 
                 thumbnail_url = info.get('thumbnail')
                 self._ui(lambda: self.video_title_label.configure(text=title))
@@ -973,13 +948,7 @@ class UniversalVideoDownloaderApp(ctk.CTk):
 
             s_val = task['start_sec']
             e_val = task['end_sec']
-            download_ranges = None
-            if s_val is not None or e_val is not None:
-                def my_download_range_func(info_dict, ydl):
-                    start = s_val if s_val is not None else 0
-                    end = e_val if e_val is not None else float('inf')
-                    return [(start, end)]
-                download_ranges = my_download_range_func
+            download_ranges = downloader.build_download_ranges(s_val, e_val)
 
             ydl_opts = downloader.build_ydl_opts(
                 task, out_template,

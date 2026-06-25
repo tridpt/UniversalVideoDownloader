@@ -12,6 +12,24 @@ from typing import Callable, Optional
 from core import get_format_string
 
 
+def build_download_ranges(start_sec, end_sec):
+    """Tạo hàm download_ranges cho yt-dlp từ thời điểm bắt đầu/kết thúc (giây).
+
+    Trả về None nếu cả hai đều None (không cắt). Nếu chỉ có một, phần còn lại
+    mở (0 cho đầu, vô hạn cho cuối).
+    """
+    if start_sec is None and end_sec is None:
+        return None
+
+    start = start_sec if start_sec is not None else 0
+    end = end_sec if end_sec is not None else float('inf')
+
+    def _ranges(info_dict, ydl):
+        return [(start, end)]
+
+    return _ranges
+
+
 def build_out_template(download_folder: str, is_playlist: bool) -> str:
     """Tạo mẫu đường dẫn xuất file cho yt-dlp."""
     if is_playlist:

@@ -184,3 +184,84 @@ class TestGetFfmpegPath:
             import os
             exe = 'ffmpeg.exe' if os.name == 'nt' else 'ffmpeg'
             assert os.path.exists(os.path.join(result, exe))
+
+
+# ---------------------- cookie_opts_from_choice ----------------------
+
+class TestCookieOptsFromChoice:
+    def test_no_cookie_returns_none(self):
+        assert core.cookie_opts_from_choice("Không Dùng Cookie") is None
+
+    def test_empty_or_none_returns_none(self):
+        assert core.cookie_opts_from_choice("") is None
+        assert core.cookie_opts_from_choice(None) is None
+        assert core.cookie_opts_from_choice("   ") is None
+
+    @pytest.mark.parametrize("choice,expected", [
+        ("Tài khoản Chrome", ("chrome",)),
+        ("Tài khoản Edge", ("edge",)),
+        ("Tài khoản Firefox", ("firefox",)),
+        ("Tài khoản Brave", ("brave",)),
+    ])
+    def test_browser_choices(self, choice, expected):
+        assert core.cookie_opts_from_choice(choice) == expected
+
+    def test_whitespace_trimmed(self):
+        assert core.cookie_opts_from_choice("  Tài khoản Chrome  ") == ("chrome",)
+
+
+# ---------------------- total_filesize_bytes ----------------------
+
+class TestTotalFilesizeBytes:
+    def test_requested_formats_summed(self):
+        info = {'requested_formats': [
+            {'filesize': 1000},
+            {'filesize_approx': 500},
+        ]}
+        assert core.total_filesize_bytes(info) == 1500
+
+    def test_single_filesize(self):
+        assert core.total_filesize_bytes({'filesize': 2048}) == 2048
+
+    def test_filesize_approx_fallback(self):
+        assert core.total_filesize_bytes({'filesize_approx': 999}) == 999
+
+    def test_unknown_returns_zero(self):
+        assert core.total_filesize_bytes({}) == 0
+        assert core.total_filesize_bytes(None) == 0
+
+    def test_requested_formats_with_missing_sizes(self):
+        info = {'requested_formats': [{'filesize': 100}, {}]}
+        assert core.total_filesize_bytes(info) == 100
+
+
+# ---------------------- human_size_label ----------------------
+
+class TestHumanSizeLabel:
+    def test_positive_size_in_mb(self):
+        label = core.human_size_label(1024 * 1024 * 5)  # 5 MB
+        assert "5.0 MB" in label
+        assert label.startswith("Dung lượng cỡ:")
+
+    def test_zero_unknown(self):
+        assert core.human_size_label(0) == "Dung lượng: [Chưa rõ]"
+
+    def test_none_unknown(self):
+        assert core.human_size_label(None) == "Dung lượng: [Chưa rõ]"
+
+
+# ---------------------- format_duration ----------------------
+
+class TestFormatDuration:
+    def test_minutes_and_seconds(self):
+        assert core.format_duration(330) == "Thời lượng: 5 phút 30 giây"
+
+    def test_seconds_only(self):
+        assert core.format_duration(45) == "Thời lượng: 0 phút 45 giây"
+
+    def test_zero_and_none(self):
+        assert core.format_duration(0) == "Thời lượng: 0 phút 0 giây"
+        assert core.format_duration(None) == "Thời lượng: 0 phút 0 giây"
+
+    def test_float_truncated(self):
+        assert core.format_duration(90.9) == "Thời lượng: 1 phút 30 giây"
