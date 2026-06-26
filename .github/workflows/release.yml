@@ -31,6 +31,9 @@ jobs:
       - name: Run tests
         run: python -m pytest -v
 
+      - name: Download ffmpeg binaries (static_ffmpeg)
+        run: python -c "import static_ffmpeg; static_ffmpeg.add_paths()"
+
       - name: Build exe with PyInstaller
         run: pyinstaller UniversalVideoDownloader.spec
 
