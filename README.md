@@ -85,10 +85,11 @@ The codebase is split into focused modules to keep logic testable and the UI thi
 | File | Responsibility |
 | --- | --- |
 | `main.py` | GUI (CustomTkinter) and orchestration |
-| `core.py` | Pure logic: time parsing, format strings, resolution detection, FFmpeg path, folder classification |
-| `downloader.py` | Builds `yt-dlp` options and output templates |
-| `config_store.py` | Reads/writes user config and download history (JSON) |
-| `test_core.py`, `test_downloader.py` | Pytest suites for the pure-logic modules |
+| `core.py` | Pure logic: time parsing, format/quality strings, resolution detection, rate-limit & cookie parsing, recent folders, FFmpeg path, folder classification |
+| `downloader.py` | Builds `yt-dlp` options, output templates, and download ranges |
+| `queue_logic.py` | Pure queue logic: concurrency clamping, batching, retry decisions, result summaries |
+| `config_store.py` | Reads/writes user config and download history (JSON); exports history to CSV |
+| `test_core.py`, `test_downloader.py`, `test_queue_logic.py` | Pytest suites for the pure-logic modules |
 
 ## ✅ Running Tests
 
