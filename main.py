@@ -756,9 +756,10 @@ class UniversalVideoDownloaderApp(ctk.CTk):
                 self._set_progress(1.0)
         return hook
 
-    def _resolve_final_filepath(self, info, download_folder):
+    def _resolve_final_filepath(self, info, download_folder, format_choice=None):
         """Suy ra đường dẫn file cuối cùng sau khi tải (xét cả chuyển sang .mp3)."""
-        is_audio = self.format_var.get() == "Âm thanh (MP3)"
+        choice = format_choice if format_choice is not None else self.format_var.get()
+        is_audio = choice == "Âm thanh (MP3)"
         return core.resolve_final_filepath(info, is_audio)
 
     def _render_history_item(self, title, download_folder, filepath=None):
@@ -1016,7 +1017,7 @@ class UniversalVideoDownloaderApp(ctk.CTk):
                         downloaded_title = info.get('title', 'Video Mới Tải')
                         history_folder = download_folder
                         # Lấy đường dẫn file cuối cùng để có thể mở trực tiếp
-                        final_filepath = self._resolve_final_filepath(info, download_folder)
+                        final_filepath = self._resolve_final_filepath(info, download_folder, task.get('format_choice'))
 
                 if not self.is_cancelled:
                     if retry_without_subtitles:
@@ -1039,24 +1040,20 @@ class UniversalVideoDownloaderApp(ctk.CTk):
 
                     if not is_playlist:
                         try:
-                            # 1. Clean expected final files from output template
-                            for ext in ['.mp4', '.m4a', '.webm', '.mp3']:
-                                expected_final = out_template.replace('.%(ext)s', ext)
-                                dir_path = os.path.dirname(expected_final)
-                                if os.path.exists(dir_path):
-                                    for f in os.listdir(dir_path):
-                                        if f.endswith('.ytdl') or f.endswith('.part'):
-                                            os.remove(os.path.join(dir_path, f))
-                                            cleaned = True
-
-                            # 2. Clean thumbnails and media starting with exact base_name from yt-dlp info_dict
-                            if state.get('current_filename'):
-                                base_name = os.path.splitext(state['current_filename'])[0]
-                                possible_exts = ['.webp', '.jpg', '.png', '.mp4', '.m4a', '.webm', '.mp3', '.part', '.ytdl']
-                                for ext in possible_exts:
-                                    target = base_name + ext
-                                    if os.path.exists(target):
-                                        os.remove(target)
+                            # Chỉ dọn các file tạm/dang dở (.part, .ytdl, .webp) của chính video vừa hủy,
+                            # tránh xóa nhầm các tác vụ đang tải song song hoặc file video đã tải xong trước đó.
+                            cur_file = state.get('current_filename')
+                            if cur_file:
+                                base_name = os.path.splitext(cur_file)[0]
+                                for candidate in (
+                                    cur_file + '.part',
+                                    cur_file + '.ytdl',
+                                    base_name + '.part',
+                                    base_name + '.ytdl',
+                                    base_name + '.webp',
+                                ):
+                                    if os.path.exists(candidate):
+                                        os.remove(candidate)
                                         cleaned = True
                         except Exception:
                             pass
